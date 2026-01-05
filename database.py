@@ -1,0 +1,164 @@
+import sqlite3
+from datetime import datetime, timedelta
+import os
+
+DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'electrical_shop.db')
+
+def get_ist_datetime():
+    """Get current datetime in IST (GMT +5:30)"""
+    utc_now = datetime.utcnow()
+    ist_offset = timedelta(hours=5, minutes=30)
+    ist_now = utc_now + ist_offset
+    return ist_now.strftime("%Y-%m-%d %H:%M:%S")
+
+class Database:
+    def __init__(self):
+        self.connection = None
+        self.cursor = None
+        self.init_database()
+
+    def init_database(self):
+        """Initialize database and create tables"""
+        self.connection = sqlite3.connect(DB_PATH, check_same_thread=False)
+        self.cursor = self.connection.cursor()
+        
+        # Products table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                category TEXT NOT NULL,
+                unit_price REAL NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                minimum_stock INTEGER DEFAULT 5,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Stock movements table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS stock_movements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id INTEGER NOT NULL,
+                movement_type TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                reference_id INTEGER,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (product_id) REFERENCES products(id)
+            )
+        ''')
+
+        # Transactions/Bills table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_name TEXT NOT NULL,
+                total_amount REAL NOT NULL,
+                payment_method TEXT DEFAULT 'CASH',
+                cash_amount REAL,
+                upi_amount REAL,
+                bill_number TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Transaction items table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS transaction_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_id INTEGER NOT NULL,
+                product_id INTEGER NOT NULL,
+                product_name TEXT,
+                quantity INTEGER NOT NULL,
+                unit_price REAL NOT NULL,
+                total_price REAL NOT NULL,
+                FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+            )
+        ''')
+
+        # Expenses table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                amount REAL NOT NULL,
+                expense_date DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Supplier Bills table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS supplier_bills (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                supplier_name TEXT NOT NULL,
+                bill_number TEXT NOT NULL,
+                bill_date TEXT NOT NULL,
+                total_amount REAL NOT NULL,
+                paid_amount REAL DEFAULT 0,
+                status TEXT DEFAULT 'UNPAID',
+                description TEXT,
+                due_date TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                paid_at DATETIME
+            )
+        ''')
+
+        # Supplier Bill Payments table
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS supplier_bill_payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bill_id INTEGER NOT NULL,
+                payment_amount REAL NOT NULL,
+                payment_date TEXT NOT NULL,
+                notes TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (bill_id) REFERENCES supplier_bills(id)
+            )
+        ''')
+
+        self.connection.commit()
+
+    def close(self):
+        """Close database connection"""
+        if self.connection:
+            self.connection.close()
+
+    def execute_query(self, query, params=None):
+        """Execute a query"""
+        try:
+            if params:
+                self.cursor.execute(query, params)
+            else:
+                self.cursor.execute(query)
+            self.connection.commit()
+            return True
+        except Exception as e:
+            print(f"Error executing query: {e}")
+            return False
+
+    def fetch_all(self, query, params=None):
+        """Fetch all results"""
+        try:
+            if params:
+                self.cursor.execute(query, params)
+            else:
+                self.cursor.execute(query)
+            return self.cursor.fetchall()
+        except Exception as e:
+            print(f"Error fetching data: {e}")
+            return []
+
+    def fetch_one(self, query, params=None):
+        """Fetch single result"""
+        try:
+            if params:
+                self.cursor.execute(query, params)
+            else:
+                self.cursor.execute(query)
+            return self.cursor.fetchone()
+        except Exception as e:
+            print(f"Error fetching data: {e}")
+            return None

@@ -1,0 +1,301 @@
+/* Custom Styles for Electrical Shop Management System */
+
+:root {
+    --primary-color: #0d6efd;
+    --secondary-color: #6c757d;
+    --success-color: #198754;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #0dcaf0;
+}
+
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Navbar Styling */
+.navbar-brand {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.navbar-brand i {
+    margin-right: 8px;
+    color: #ffc107;
+}
+
+/* Cards */
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin-bottom: 1.5rem;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+    font-weight: 600;
+}
+
+/* Tables */
+.table {
+    background-color: white;
+}
+
+.table thead {
+    background-color: #212529;
+    color: white;
+}
+
+.table th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+    border: none;
+    padding: 12px 8px;
+}
+
+.table td {
+    padding: 12px 8px;
+    vertical-align: middle;
+    border-color: #e9ecef;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Badges */
+.badge {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+/* Buttons */
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: none;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: #0b5ed7;
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.3);
+}
+
+.btn-success {
+    background-color: var(--success-color);
+}
+
+.btn-success:hover {
+    background-color: #157347;
+    transform: translateY(-2px);
+}
+
+.btn-warning {
+    background-color: var(--warning-color);
+    color: #000;
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+}
+
+.btn-info {
+    background-color: var(--info-color);
+    color: #000;
+}
+
+.btn-sm {
+    padding: 4px 8px;
+    font-size: 0.85rem;
+}
+
+/* Forms */
+.form-control,
+.form-select {
+    border-radius: 6px;
+    border: 1.5px solid #e9ecef;
+    transition: border-color 0.3s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.form-label {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+/* Modals */
+.modal-content {
+    border: none;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+    border-radius: 12px;
+}
+
+.modal-header {
+    border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.modal-title {
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+/* Stats Cards */
+.card.bg-primary,
+.card.bg-warning,
+.card.bg-success,
+.card.bg-info {
+    color: white;
+}
+
+.card.bg-primary {
+    background-color: var(--primary-color) !important;
+}
+
+.card.bg-success {
+    background-color: var(--success-color) !important;
+}
+
+.card.bg-warning {
+    background-color: var(--warning-color) !important;
+    color: #000;
+}
+
+.card.bg-info {
+    background-color: var(--info-color) !important;
+    color: #000;
+}
+
+.card.bg-primary h2,
+.card.bg-success h2,
+.card.bg-warning h2,
+.card.bg-info h2 {
+    font-weight: 700;
+    font-size: 2.5rem;
+    margin-bottom: 0;
+}
+
+.card.bg-primary .card-title,
+.card.bg-success .card-title,
+.card.bg-warning .card-title,
+.card.bg-info .card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+/* Tabs */
+.nav-tabs {
+    border-bottom: 2px solid #e9ecef;
+}
+
+.nav-tabs .nav-link {
+    color: #6c757d;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--primary-color);
+    background-color: transparent;
+    border-bottom-color: var(--primary-color);
+}
+
+/* Footer */
+footer {
+    margin-top: auto;
+    border-top: 1px solid #e9ecef;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .card {
+        margin-bottom: 1rem;
+    }
+
+    .table {
+        font-size: 0.9rem;
+    }
+
+    .btn-sm {
+        padding: 3px 6px;
+        font-size: 0.75rem;
+    }
+
+    h1 {
+        font-size: 1.75rem;
+    }
+}
+
+/* Utility Classes */
+.text-light-gray {
+    color: #6c757d;
+}
+
+.bg-light-gray {
+    background-color: #f8f9fa;
+}
+
+.shadow-sm {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+}
+
+.border-radius-custom {
+    border-radius: 12px;
+}
+
+/* Sticky positioning for sidebar */
+.sticky-top {
+    top: 80px;
+}
+
+/* Print Styles */
+@media print {
+    body {
+        background-color: white;
+    }
+
+    .navbar,
+    footer,
+    .btn,
+    .modal-footer {
+        display: none;
+    }
+
+    .card {
+        box-shadow: none;
+        border: 1px solid #dee2e6;
+    }
+
+    table {
+        border-collapse: collapse;
+    }
+}

@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Management - Electrical Shop{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="mb-4"><i class="bi bi-stack"></i> Stock Management</h1>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-4" role="tablist">
+    <li class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#stockReport">Stock Report</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#addStock">Add Stock</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#removeStock">Remove Stock</a>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- Stock Report Tab -->
+    <div id="stockReport" class="tab-pane fade show active">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Current Stock Report</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="stockTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Qty</th>
+                                <th>Unit Price</th>
+                                <th>Total Value</th>
+                                <th>Min Stock</th>
+                                <th>Status</th>
+                                <th>History</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stockBody">
+                            <tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th colspan="4" class="text-end">Total Inventory Value:</th>
+                                <th id="totalValue">₹0</th>
+                                <th colspan="3"></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Stock Tab -->
+    <div id="addStock" class="tab-pane fade">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Add Stock to Product</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="stockMode" id="stockModeSelect" value="select" checked onchange="toggleStockMode()">
+                        <label class="form-check-label" for="stockModeSelect">Select Existing Product</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="stockMode" id="stockModeManual" value="manual" onchange="toggleStockMode()">
+                        <label class="form-check-label" for="stockModeManual">Add New Product</label>
+                    </div>
+                </div>
+
+                <!-- Select Mode -->
+                <div id="stockSelectMode" class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Product *</label>
+                        <select class="form-select" id="addStockProductId" required>
+                            <option value="">Select Product...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Quantity to Add *</label>
+                        <input type="number" class="form-control" id="addStockQuantity" required>
+                    </div>
+                </div>
+
+                <!-- Manual Mode -->
+                <div id="stockManualMode" class="row" style="display: none;">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Product Name *</label>
+                        <input type="text" class="form-control" id="manualStockProductName" placeholder="Enter product name" required>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Category *</label>
+                        <input type="text" class="form-control" id="manualStockCategory" placeholder="e.g., Bulbs" required>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label class="form-label">Unit Price (₹) *</label>
+                        <input type="number" class="form-control" id="manualStockPrice" step="0.01" placeholder="Price" required>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">Quantity to Add *</label>
+                        <input type="number" class="form-control" id="manualStockQuantity" placeholder="Qty" required>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" id="addStockNotes" rows="3" placeholder="e.g., Supplier name, order reference..."></textarea>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-outline-secondary w-100" onclick="clearAddStockForm()">
+                            Clear
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="button" class="btn btn-success w-100" onclick="submitAddStock()">
+                            <i class="bi bi-plus-circle"></i> Add Stock
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Remove Stock Tab -->
+    <div id="removeStock" class="tab-pane fade">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">Remove Stock from Product</h5>
+            </div>
+            <div class="card-body">
+                <form id="removeStockForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Product *</label>
+                            <select class="form-select" id="removeStockProductId" required>
+                                <option value="">Select Product...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Quantity to Remove *</label>
+                            <input type="number" class="form-control" id="removeStockQuantity" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason</label>
+                        <textarea class="form-control" id="removeStockNotes" rows="3"></textarea>
+                    </div>
+                    <button type="button" class="btn btn-danger" onclick="submitRemoveStock()">
+                        <i class="bi bi-dash-circle"></i> Remove Stock
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stock History Modal -->
+<div class="modal fade" id="historyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title" id="historyTitle">Stock History</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-sm" id="historyTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Type</th>
+                                <th>Quantity</th>
+                                <th>Date/Time</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function loadStockReport() {
+        fetch('/api/stock-report')
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('stockBody');
+                if (data.items.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No products</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.items.map(item => `
+                    <tr>
+                        <td><strong>${item.name}</strong></td>
+                        <td>${item.category}</td>
+                        <td>${item.quantity}</td>
+                        <td>₹${item.unit_price.toFixed(2)}</td>
+                        <td>₹${item.total_value.toFixed(2)}</td>
+                        <td>${item.min_stock}</td>
+                        <td><span class="badge bg-${item.status === 'LOW' ? 'warning' : 'success'}">${item.status}</span></td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewHistory(${item.id}, '${item.name}')"><i class="bi bi-clock"></i></button></td>
+                    </tr>
+                `).join('');
+
+                document.getElementById('totalValue').textContent = '₹' + data.total_inventory_value.toLocaleString('en-IN', {maximumFractionDigits: 2});
+            });
+    }
+
+    function loadProducts() {
+        fetch('/api/products')
+            .then(r => r.json())
+            .then(products => {
+                const selects = document.querySelectorAll('select[id*="ProductId"]');
+                selects.forEach(select => {
+                    select.innerHTML = '<option value="">Select Product...</option>' + 
+                        products.map(p => `<option value="${p.id}">${p.name} (${p.quantity} in stock)</option>`).join('');
+                });
+            });
+    }
+
+    function toggleStockMode() {
+        const mode = document.querySelector('input[name="stockMode"]:checked').value;
+        if (mode === 'select') {
+            document.getElementById('stockSelectMode').style.display = 'flex';
+            document.getElementById('stockManualMode').style.display = 'none';
+        } else {
+            document.getElementById('stockSelectMode').style.display = 'none';
+            document.getElementById('stockManualMode').style.display = 'block';
+        }
+    }
+
+    function submitAddStock() {
+        const mode = document.querySelector('input[name="stockMode"]:checked').value;
+        
+        if (mode === 'select') {
+            submitSelectStock();
+        } else {
+            submitManualStock();
+        }
+    }
+
+    function submitSelectStock() {
+        const productId = document.getElementById('addStockProductId').value;
+        const quantity = document.getElementById('addStockQuantity').value;
+        const notes = document.getElementById('addStockNotes').value;
+
+        if (!productId || !quantity) {
+            alert('Please select product and enter quantity');
+            return;
+        }
+
+        fetch('/api/stock/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({product_id: productId, quantity, notes})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('Stock added successfully!');
+                clearAddStockForm();
+                loadStockReport();
+                loadProducts();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    }
+
+    function submitManualStock() {
+        const productName = document.getElementById('manualStockProductName').value.trim();
+        const category = document.getElementById('manualStockCategory').value.trim();
+        const price = parseFloat(document.getElementById('manualStockPrice').value);
+        const quantity = parseInt(document.getElementById('manualStockQuantity').value);
+        const notes = document.getElementById('addStockNotes').value;
+
+        if (!productName || !category || !price || !quantity) {
+            alert('Please fill all required fields');
+            return;
+        }
+
+        if (price <= 0 || quantity <= 0) {
+            alert('Price and quantity must be positive');
+            return;
+        }
+
+        // First add product
+        fetch('/api/products', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                name: productName,
+                category: category,
+                unit_price: price,
+                quantity: quantity,
+                minimum_stock: 5
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('Product added and stock updated!');
+                clearAddStockForm();
+                loadStockReport();
+                loadProducts();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    }
+
+    function clearAddStockForm() {
+        document.getElementById('addStockProductId').value = '';
+        document.getElementById('addStockQuantity').value = '';
+        document.getElementById('manualStockProductName').value = '';
+        document.getElementById('manualStockCategory').value = '';
+        document.getElementById('manualStockPrice').value = '';
+        document.getElementById('manualStockQuantity').value = '';
+        document.getElementById('addStockNotes').value = '';
+    }
+
+    function submitRemoveStock() {
+        const productId = document.getElementById('removeStockProductId').value;
+        const quantity = document.getElementById('removeStockQuantity').value;
+        const notes = document.getElementById('removeStockNotes').value;
+
+        if (!productId || !quantity) {
+            alert('Please fill required fields');
+            return;
+        }
+
+        fetch('/api/stock/remove', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({product_id: productId, quantity, notes})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert('Stock removed successfully!');
+                document.getElementById('removeStockForm').reset();
+                loadStockReport();
+                loadProducts();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    }
+
+    function viewHistory(productId, productName) {
+        fetch(`/api/stock/history/${productId}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('historyTitle').textContent = `Stock History - ${productName}`;
+                document.getElementById('historyBody').innerHTML = data.map(h => `
+                    <tr>
+                        <td><span class="badge bg-${h.movement_type === 'SALE' ? 'danger' : h.movement_type === 'REMOVE' ? 'warning' : 'success'}">${h.movement_type}</span></td>
+                        <td>${h.quantity}</td>
+                        <td>${h.created_at}</td>
+                        <td>${h.notes}</td>
+                    </tr>
+                `).join('');
+                new bootstrap.Modal(document.getElementById('historyModal')).show();
+            });
+    }
+
+    loadStockReport();
+    loadProducts();
+</script>
+{% endblock %}
