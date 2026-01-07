@@ -10,14 +10,52 @@ from stock import StockManager
 from billing import BillingManager
 from expenses import ExpenseManager
 from supplier_bills import SupplierBillManager
+from cleanup_old_records import DatabaseCleaner
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 import json
 from datetime import datetime
 import io
 from functools import wraps
+import logging
 
 app = Flask(__name__)
 app.secret_key = 'saibaba_venkata_secret_key_2026'  # Secret key for session management
 CORS(app)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize background scheduler for automatic cleanup
+scheduler = BackgroundScheduler()
+
+def run_weekly_cleanup():
+    """Run database cleanup automatically every Sunday at 2 AM"""
+    try:
+        logger.info("Starting automatic weekly database cleanup...")
+        cleaner = DatabaseCleaner()
+        cleaner.cleanup()
+        cleaner.close()
+        logger.info("Weekly cleanup completed successfully")
+    except Exception as e:
+        logger.error(f"Error during weekly cleanup: {e}")
+
+# Schedule cleanup for every Sunday at 2 AM
+scheduler.add_job(
+    func=run_weekly_cleanup,
+    trigger=CronTrigger(day_of_week=6, hour=2, minute=0),
+    id='weekly_cleanup',
+    name='Weekly Database Cleanup',
+    replace_existing=True
+)
+
+@app.before_first_request
+def start_scheduler():
+    """Start the scheduler when the app starts"""
+    if not scheduler.running:
+        scheduler.start()
+        logger.info("Background scheduler started - automatic cleanup enabled")
 
 def get_managers():
     """Get or create managers for current request"""
