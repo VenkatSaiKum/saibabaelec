@@ -50,12 +50,10 @@ scheduler.add_job(
     replace_existing=True
 )
 
-@app.before_first_request
-def start_scheduler():
-    """Start the scheduler when the app starts"""
-    if not scheduler.running:
-        scheduler.start()
-        logger.info("Background scheduler started - automatic cleanup enabled")
+# Start scheduler immediately when app starts
+if not scheduler.running:
+    scheduler.start()
+    logger.info("Background scheduler started - automatic cleanup enabled")
 
 def get_managers():
     """Get or create managers for current request"""
