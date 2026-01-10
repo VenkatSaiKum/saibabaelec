@@ -353,9 +353,11 @@ class BillingManager:
         }
 
     def get_credit_bills_by_customer(self, customer_name):
-        """Get all credit bills for a customer ordered FIFO"""
+        """Get all credit bills for a customer ordered FIFO, include last payment date"""
         bills = self.db.fetch_all(
-            '''SELECT id, bill_number, total_amount, received_amount, credit_status, created_at
+            '''SELECT 
+                   id, bill_number, total_amount, received_amount, credit_status, created_at,
+                   (SELECT MAX(payment_date) FROM credit_bill_payments p WHERE p.transaction_id = transactions.id) as last_payment_date
                FROM transactions
                WHERE is_credit = 1 AND customer_name = ?
                ORDER BY created_at ASC, id ASC''',
@@ -370,7 +372,8 @@ class BillingManager:
                 'received_amount': b[3],
                 'balance': float(b[2]) - float(b[3]),
                 'credit_status': b[4],
-                'created_at': b[5]
+                'created_at': b[5],
+                'last_payment_date': b[6]
             })
         return result
 

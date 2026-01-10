@@ -252,12 +252,14 @@ function viewCreditDetailCustomer(customerName){
                 <tr>
                     <td>${b.bill_number}</td>
                     <td>${b.created_at || ''}</td>
+                    <td>${b.last_payment_date || '-'}</td>
                     <td class="text-end">${formatCurrency(b.total_amount)}</td>
                     <td class="text-end">${formatCurrency(b.received_amount)}</td>
                     <td class="text-end">${formatCurrency(b.balance)}</td>
                     <td>${b.credit_status}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="deleteCreditBill(${b.id})"><i class="bi bi-trash"></i></button></td>
                 </tr>
-            `).join('') || '<tr><td colspan="6" class="text-center text-muted">No bills</td></tr>';
+            `).join('') || '<tr><td colspan="8" class="text-center text-muted">No bills</td></tr>';
             const totals = (bills || []).reduce((acc,b)=>{
                 acc.total += Number(b.total_amount)||0;
                 acc.received += Number(b.received_amount)||0;
@@ -269,7 +271,7 @@ function viewCreditDetailCustomer(customerName){
                 <div class="mb-2"><strong>Total:</strong> ${formatCurrency(totals.total)} | <strong>Received:</strong> ${formatCurrency(totals.received)} | <strong>Balance:</strong> ${formatCurrency(balance)}</div>
                 <div class="table-responsive">
                     <table class="table table-sm">
-                        <thead class="table-light"><tr><th>Bill #</th><th>Date</th><th class="text-end">Total</th><th class="text-end">Received</th><th class="text-end">Balance</th><th>Status</th></tr></thead>
+                        <thead class="table-light"><tr><th>Bill #</th><th>Date</th><th>Payment Date</th><th class="text-end">Total</th><th class="text-end">Received</th><th class="text-end">Balance</th><th>Status</th><th>Delete</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table>
                 </div>
@@ -282,5 +284,21 @@ function viewCreditDetailCustomer(customerName){
 document.addEventListener('DOMContentLoaded', () => {
     loadCreditBills();
 });
+
+function deleteCreditBill(billId){
+    if(confirm('Are you sure you want to delete this credit bill?')){
+        fetch(`/api/transactions/${billId}`, {method: 'DELETE'})
+            .then(r=>r.json())
+            .then(res => {
+                if(res.success){
+                    loadCreditBills();
+                    alert('Bill deleted successfully');
+                }else{
+                    alert(res.error || 'Delete failed');
+                }
+            });
+    }
+}
+
 </script>
 {% endblock %}

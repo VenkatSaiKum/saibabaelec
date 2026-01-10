@@ -5,68 +5,71 @@
 {% block content %}
 <div class="row mb-4">
     <div class="col-md-12">
-        <h1 class="mb-4"><i class="bi bi-file-earmark-text"></i> Supplier Bills</h1>
-    </div>
-</div>
-
-<!-- Summary Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card bg-danger text-white">
-            <div class="card-body">
-                <h6 class="card-title">Total Unpaid</h6>
-                <h3 id="totalUnpaid">₹0</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-warning text-dark">
-            <div class="card-body">
-                <h6 class="card-title">Unpaid Bills</h6>
-                <h3 id="unpaidCount">0</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <h6 class="card-title">Partial Paid</h6>
-                <h3 id="partialCount">0</h3>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <h6 class="card-title">Paid This Month</h6>
-                <h3 id="paidThisMonth">₹0</h3>
-            </div>
-        </div>
+        <h1 class="mb-4"><i class="bi bi-building"></i> Supplier Bills</h1>
     </div>
 </div>
 
 <ul class="nav nav-tabs mb-4" role="tablist">
     <li class="nav-item">
-        <a class="nav-link active" data-bs-toggle="tab" href="#allBills">All Bills</a>
+        <a class="nav-link active" data-bs-toggle="tab" href="#billHistory">Bill History</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link" data-bs-toggle="tab" href="#addBill">Add Bill</a>
+        <a class="nav-link" data-bs-toggle="tab" href="#createBill">Add New Bill</a>
     </li>
 </ul>
 
 <div class="tab-content">
-    <!-- All Bills Tab -->
-    <div id="allBills" class="tab-pane fade show active">
-        <div class="card">
+    <!-- Bill History Tab -->
+    <div id="billHistory" class="tab-pane fade show active">
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Total Balance</h6>
+                        <h3 id="totalBalance">₹0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-dark">
+                    <div class="card-body">
+                        <h6 class="card-title">Unpaid Bills</h6>
+                        <h3 id="unpaidCount">0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Partial Paid</h6>
+                        <h3 id="partialCount">0</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h6 class="card-title">Paid Bills</h6>
+                        <h3 id="paidCount">0</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Supplier Bills</h5>
-                <div>
-                    <select class="form-select form-select-sm" id="statusFilter" onchange="filterBills()">
+                <div class="d-flex gap-2">
+                    <select class="form-select form-select-sm" id="statusFilter" onchange="loadBills()">
                         <option value="">All Status</option>
                         <option value="UNPAID">Unpaid</option>
-                        <option value="PARTIAL">Partial Paid</option>
+                        <option value="PARTIAL">Partial</option>
                         <option value="PAID">Paid</option>
                     </select>
+                    <button class="btn btn-sm btn-outline-light" onclick="loadBills()">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
                 </div>
             </div>
             <div class="card-body">
@@ -74,19 +77,18 @@
                     <table class="table table-hover">
                         <thead class="table-dark">
                             <tr>
-                                <th>Bill #</th>
                                 <th>Supplier</th>
-                                <th>Bill Date</th>
-                                <th>Due Date</th>
-                                <th>Total Amount</th>
-                                <th>Paid Amount</th>
-                                <th>Balance</th>
+                                <th>Bills</th>
+                                <th>First Bill</th>
+                                <th class="text-end">Total</th>
+                                <th class="text-end">Paid</th>
+                                <th class="text-end">Balance</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="billsBody">
-                            <tr><td colspan="9" class="text-center text-muted">Loading...</td></tr>
+                        <tbody id="billsTable">
+                            <tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -95,13 +97,13 @@
     </div>
 
     <!-- Add Bill Tab -->
-    <div id="addBill" class="tab-pane fade">
+    <div id="createBill" class="tab-pane fade">
         <div class="card">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">Add Supplier Bill</h5>
+                <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Add New Supplier Bill</h5>
             </div>
             <div class="card-body">
-                <form id="addBillForm">
+                <form id="addBillForm" onsubmit="addBill(event)">
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Supplier Name *</label>
@@ -113,35 +115,21 @@
                         </div>
                     </div>
                     <div class="row">
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">Bill Date *</label>
                             <input type="date" class="form-control" id="billDate" required>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Due Date</label>
-                            <input type="date" class="form-control" id="dueDate">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Total Amount (₹) *</label>
-                            <input type="number" class="form-control" id="totalAmount" step="0.01" required>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Amount (₹) *</label>
+                            <input type="number" class="form-control" id="billAmount" step="0.01" required>
                         </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Description</label>
-                        <textarea class="form-control" id="description" rows="3" placeholder="Items purchased, notes..."></textarea>
+                        <textarea class="form-control" id="billDescription" rows="3"></textarea>
                     </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <button type="button" class="btn btn-outline-secondary w-100" onclick="clearAddBillForm()">
-                                Clear
-                            </button>
-                        </div>
-                        <div class="col-md-6">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="bi bi-plus-circle"></i> Add Bill
-                            </button>
-                        </div>
-                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Add Bill</button>
+                    <button type="reset" class="btn btn-outline-secondary">Clear</button>
                 </form>
             </div>
         </div>
@@ -157,302 +145,266 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <input type="hidden" id="paymentBillId">
+                <input type="hidden" id="paySupplier">
+                <div class="mb-2"><strong id="paySupplierName"></strong></div>
+                <div class="mb-2">Total: <span id="payTotalAmount"></span></div>
+                <div class="mb-2">Already Paid: <span id="payAlreadyPaid"></span></div>
+                <div class="mb-2">Balance: <span id="payBalance" class="text-danger"></span></div>
                 <div class="mb-3">
-                    <label class="form-label">Supplier: <strong id="paymentSupplier"></strong></label>
+                    <label class="form-label">Payment Amount (₹)</label>
+                    <input type="number" class="form-control" id="payAmount" step="0.01" placeholder="Leave blank to mark fully paid">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Bill Number: <strong id="paymentBillNumber"></strong></label>
+                    <label class="form-label">Payment Date</label>
+                    <input type="date" class="form-control" id="payDate">
                 </div>
                 <div class="mb-3">
-                    <label class="form-label">Total Amount: <strong id="paymentTotalAmount"></strong></label>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Already Paid: <strong id="paymentAlreadyPaid"></strong></label>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Balance: <strong id="paymentBalance" class="text-danger"></strong></label>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Payment Amount (₹) *</label>
-                    <input type="number" class="form-control" id="paymentAmount" step="0.01" placeholder="Enter amount to pay">
-                    <small class="text-muted">Leave empty to mark as fully paid</small>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Payment Date *</label>
-                    <input type="date" class="form-control" id="paymentDate" required>
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" id="payNotes" rows="2" placeholder="Optional"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-success" onclick="submitPayment()">
-                    <i class="bi bi-check-circle"></i> Submit Payment
+                    <i class="bi bi-check-circle"></i> Submit
                 </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Bill Details Modal -->
+<!-- Details Modal -->
 <div class="modal fade" id="detailsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
-                <h5 class="modal-title">Bill Details</h5>
+                <h5 class="modal-title">Supplier Bills Details</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body" id="detailsBody">
-                <!-- Details will be populated here -->
+            <div class="modal-body" id="detailsBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
 <script>
-    // Get current date in IST timezone (India Standard Time: UTC +5:30)
-    function getISTDate() {
-        const now = new Date();
-        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-        const ist = new Date(utc + (5.5 * 60 * 60 * 1000)); // IST is UTC +5:30
-        const year = ist.getFullYear();
-        const month = String(ist.getMonth() + 1).padStart(2, '0');
-        const date = String(ist.getDate()).padStart(2, '0');
-        return `${year}-${month}-${date}`;
-    }
+let supplierBills = [];
 
-    function loadSummary() {
-        fetch('/api/supplier-bills/summary')
-            .then(r => r.json())
-            .then(data => {
-                document.getElementById('totalUnpaid').textContent = '₹' + data.total_unpaid.toLocaleString('en-IN', {maximumFractionDigits: 2});
-                document.getElementById('unpaidCount').textContent = data.unpaid_count;
-                document.getElementById('partialCount').textContent = data.partial_count;
-                document.getElementById('paidThisMonth').textContent = '₹' + data.paid_this_month.toLocaleString('en-IN', {maximumFractionDigits: 2});
-            });
-    }
+function formatCurrency(val) {
+    return '₹' + (Number(val) || 0).toFixed(2);
+}
 
-    function loadBills(status = '') {
-        const url = status ? `/api/supplier-bills?status=${status}` : '/api/supplier-bills';
-        fetch(url)
-            .then(r => r.json())
-            .then(bills => {
-                const tbody = document.getElementById('billsBody');
-                if (bills.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No bills found</td></tr>';
-                    return;
-                }
+function getISTDate() {
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + (5.5 * 60 * 60 * 1000));
+    const year = ist.getFullYear();
+    const month = String(ist.getMonth() + 1).padStart(2, '0');
+    const date = String(ist.getDate()).padStart(2, '0');
+    return `${year}-${month}-${date}`;
+}
 
-                tbody.innerHTML = bills.map(bill => {
-                    const balance = bill.total_amount - bill.paid_amount;
-                    const statusBadge = bill.status === 'PAID' ? 'success' : bill.status === 'PARTIAL' ? 'warning' : 'danger';
-                    
-                    return `
-                        <tr>
-                            <td><strong>${bill.bill_number}</strong></td>
-                            <td>${bill.supplier_name}</td>
-                            <td>${bill.bill_date}</td>
-                            <td>${bill.due_date || '-'}</td>
-                            <td>₹${bill.total_amount.toFixed(2)}</td>
-                            <td>₹${bill.paid_amount.toFixed(2)}</td>
-                            <td>₹${balance.toFixed(2)}</td>
-                            <td><span class="badge bg-${statusBadge}">${bill.status}</span></td>
-                            <td>
-                                <button class="btn btn-sm btn-info" onclick="viewDetails(${bill.id})" title="View Details">
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                                ${bill.status !== 'PAID' ? `
-                                    <button class="btn btn-sm btn-success" onclick="openPaymentModal(${bill.id})" title="Make Payment">
-                                        <i class="bi bi-cash"></i>
-                                    </button>
-                                ` : ''}
-                                <button class="btn btn-sm btn-danger" onclick="deleteBill(${bill.id})" title="Delete">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            });
-    }
-
-    function filterBills() {
-        const status = document.getElementById('statusFilter').value;
-        loadBills(status);
-    }
-
-    document.getElementById('addBillForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const data = {
-            supplier_name: document.getElementById('supplierName').value,
-            bill_number: document.getElementById('billNumber').value,
-            bill_date: document.getElementById('billDate').value,
-            total_amount: document.getElementById('totalAmount').value,
-            description: document.getElementById('description').value,
-            due_date: document.getElementById('dueDate').value
-        };
-
-        fetch('/api/supplier-bills', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        })
+function loadSummary() {
+    fetch('/api/supplier-bills/summary')
         .then(r => r.json())
-        .then(result => {
-            if (result.success) {
-                alert('Supplier bill added successfully!');
-                clearAddBillForm();
-                loadBills();
-                loadSummary();
-                document.querySelector('a[href="#allBills"]').click();
-            }
-        });
-    });
-
-    function clearAddBillForm() {
-        document.getElementById('addBillForm').reset();
-        document.getElementById('billDate').value = getISTDate();
-    }
-
-    function openPaymentModal(billId) {
-        fetch(`/api/supplier-bills/${billId}`)
-            .then(r => r.json())
-            .then(bill => {
-                document.getElementById('paymentBillId').value = bill.id;
-                document.getElementById('paymentSupplier').textContent = bill.supplier_name;
-                document.getElementById('paymentBillNumber').textContent = bill.bill_number;
-                document.getElementById('paymentTotalAmount').textContent = '₹' + bill.total_amount.toFixed(2);
-                document.getElementById('paymentAlreadyPaid').textContent = '₹' + bill.paid_amount.toFixed(2);
-                const balance = bill.total_amount - bill.paid_amount;
-                document.getElementById('paymentBalance').textContent = '₹' + balance.toFixed(2);
-                document.getElementById('paymentAmount').value = '';
-                document.getElementById('paymentAmount').max = balance;
-                
-                // Set payment date to today's IST date automatically
-                const todayIST = getISTDate();
-                document.getElementById('paymentDate').value = todayIST;
-                
-                // Store today's IST date for auto-increment
-                document.getElementById('paymentDate').dataset.billDate = todayIST;
-                
-                new bootstrap.Modal(document.getElementById('paymentModal')).show();
-            });
-    }
-
-    function submitPayment() {
-        const billId = document.getElementById('paymentBillId').value;
-        const amount = document.getElementById('paymentAmount').value;
-        const paymentDate = document.getElementById('paymentDate').value;
-
-        if (!paymentDate) {
-            alert('Please select payment date');
-            return;
-        }
-
-        fetch(`/api/supplier-bills/${billId}/pay`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({payment_amount: amount, payment_date: paymentDate})
+        .then(s => {
+            document.getElementById('totalBalance').textContent = formatCurrency(s.total_unpaid || 0);
+            document.getElementById('unpaidCount').textContent = s.unpaid_count || 0;
+            document.getElementById('partialCount').textContent = s.partial_count || 0;
+            document.getElementById('paidCount').textContent = s.paid_count || 0;
         })
-        .then(r => r.json())
-        .then(result => {
-            if (result.success) {
-                alert('Payment recorded successfully!');
-                bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
-                loadBills();
-                loadSummary();
-            }
-        });
-    }
+        .catch(e => console.error('Summary load error:', e));
+}
 
-    function viewDetails(billId) {
-        fetch(`/api/supplier-bills/${billId}`)
-            .then(r => r.json())
-            .then(bill => {
-                const balance = bill.total_amount - bill.paid_amount;
-                let paymentHistoryHtml = '';
-                
-                if (bill.payment_history && bill.payment_history.length > 0) {
-                    paymentHistoryHtml = `
-                        <h6 class="mt-4 mb-3">Payment History</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Payment Date</th>
-                                        <th>Amount</th>
-                                        <th>Notes</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${bill.payment_history.map(p => `
-                                        <tr>
-                                            <td><strong>${p.payment_date}</strong></td>
-                                            <td>₹${p.payment_amount.toFixed(2)}</td>
-                                            <td>${p.notes || '-'}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    `;
-                }
-                
-                document.getElementById('detailsBody').innerHTML = `
-                    <table class="table">
-                        <tr><th>Supplier Name:</th><td>${bill.supplier_name}</td></tr>
-                        <tr><th>Bill Number:</th><td>${bill.bill_number}</td></tr>
-                        <tr><th>Bill Date:</th><td>${bill.bill_date}</td></tr>
-                        <tr><th>Due Date:</th><td>${bill.due_date || 'Not set'}</td></tr>
-                        <tr><th>Total Amount:</th><td>₹${bill.total_amount.toFixed(2)}</td></tr>
-                        <tr><th>Paid Amount:</th><td>₹${bill.paid_amount.toFixed(2)}</td></tr>
-                        <tr><th>Balance:</th><td class="text-danger"><strong>₹${balance.toFixed(2)}</strong></td></tr>
-                        <tr><th>Status:</th><td><span class="badge bg-${bill.status === 'PAID' ? 'success' : bill.status === 'PARTIAL' ? 'warning' : 'danger'}">${bill.status}</span></td></tr>
-                        <tr><th>Description:</th><td>${bill.description || 'N/A'}</td></tr>
-                        <tr><th>Created At:</th><td>${bill.created_at}</td></tr>
-                    </table>
-                    ${paymentHistoryHtml}
-                `;
-                new bootstrap.Modal(document.getElementById('detailsModal')).show();
-            });
-    }
-
-    function deleteBill(billId) {
-        if (confirm('Are you sure you want to delete this bill?')) {
-            fetch(`/api/supplier-bills/${billId}`, {method: 'DELETE'})
-                .then(r => r.json())
-                .then(result => {
-                    if (result.success) {
-                        alert('Bill deleted successfully!');
-                        loadBills();
-                        loadSummary();
-                    }
-                });
-        }
-    }
-
-    // Set today's date (IST) as default
-    document.getElementById('billDate').value = getISTDate();
-
-    // Auto-update payment date to today's IST date
-    const paymentDateInput = document.getElementById('paymentDate');
-    let lastCheckedISTDate = getISTDate();
+function loadBills() {
+    const status = document.getElementById('statusFilter').value;
+    const url = status ? `/api/supplier-bills?aggregate=1&status=${status}` : '/api/supplier-bills?aggregate=1';
     
-    // Check every 10 seconds to update if day has changed
-    setInterval(() => {
-        const currentISTDate = getISTDate();
-        if (currentISTDate !== lastCheckedISTDate) {
-            lastCheckedISTDate = currentISTDate;
-            // If payment modal is open, update the payment date
-            if (paymentDateInput && paymentDateInput.offsetParent !== null) {
-                paymentDateInput.value = currentISTDate;
-            }
-        }
-    }, 10000); // Check every 10 seconds
+    fetch(url)
+        .then(r => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        })
+        .then(data => {
+            supplierBills = data || [];
+            renderBills();
+            loadSummary();
+        })
+        .catch(e => {
+            console.error('Bills load error:', e);
+            document.getElementById('billsTable').innerHTML = `<tr><td colspan="8" class="text-center text-danger">Error loading bills: ${e.message}</td></tr>`;
+        });
+}
 
+function renderBills() {
+    const tbody = document.getElementById('billsTable');
+    if (!supplierBills.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No suppliers found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = supplierBills.map(s => {
+        const balance = (s.total_amount || 0) - (s.paid_amount || 0);
+        const statusText = s.open_bills === 0 ? 'PAID' : (s.paid_amount ? 'PARTIAL' : 'UNPAID');
+        const badgeClass = statusText === 'PAID' ? 'bg-success' : (statusText === 'PARTIAL' ? 'bg-info' : 'bg-danger');
+        
+        return `<tr>
+            <td>${s.supplier_name}</td>
+            <td>${s.bill_count}</td>
+            <td>${s.first_bill_date || ''}</td>
+            <td class="text-end">${formatCurrency(s.total_amount)}</td>
+            <td class="text-end">${formatCurrency(s.paid_amount)}</td>
+            <td class="text-end">${formatCurrency(balance)}</td>
+            <td><span class="badge ${badgeClass}">${statusText}</span></td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick='viewSupplierBills("${s.supplier_name}")'><i class="bi bi-eye"></i> View</button>
+                ${statusText !== 'PAID' ? `<button class="btn btn-sm btn-success" onclick='openPaymentModal("${s.supplier_name}")'><i class="bi bi-cash-coin"></i> Pay</button>` : ''}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function openPaymentModal(supplierName) {
+    document.getElementById('paySupplier').value = supplierName;
+    document.getElementById('paySupplierName').textContent = supplierName;
+    
+    const supplier = supplierBills.find(s => s.supplier_name === supplierName);
+    if (supplier) {
+        document.getElementById('payTotalAmount').textContent = formatCurrency(supplier.total_amount);
+        document.getElementById('payAlreadyPaid').textContent = formatCurrency(supplier.paid_amount);
+        document.getElementById('payBalance').textContent = formatCurrency((supplier.total_amount || 0) - (supplier.paid_amount || 0));
+    }
+    
+    document.getElementById('payAmount').value = '';
+    document.getElementById('payNotes').value = '';
+    document.getElementById('payDate').value = getISTDate();
+    
+    const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
+    modal.show();
+}
+
+function submitPayment() {
+    const supplierName = document.getElementById('paySupplier').value;
+    const amountVal = document.getElementById('payAmount').value;
+    const paymentDate = document.getElementById('payDate').value;
+    const notes = document.getElementById('payNotes').value;
+    
+    const payload = {
+        payment_amount: amountVal === '' ? null : parseFloat(amountVal),
+        payment_date: paymentDate,
+        notes: notes
+    };
+    
+    fetch(`/api/supplier-bills/supplier/${encodeURIComponent(supplierName)}/pay`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+            loadBills();
+            alert('Payment recorded successfully!');
+        } else {
+            alert(res.error || 'Payment failed');
+        }
+    })
+    .catch(e => alert('Error: ' + e));
+}
+
+function viewSupplierBills(supplierName) {
+    fetch(`/api/supplier-bills/supplier/${encodeURIComponent(supplierName)}`)
+        .then(r => r.json())
+        .then(bills => {
+            const rows = (bills || []).map(b => `
+                <tr>
+                    <td>${b.bill_number}</td>
+                    <td>${b.bill_date || ''}</td>
+                    <td>${b.last_payment_date || '-'}</td>
+                    <td class="text-end">${formatCurrency(b.total_amount)}</td>
+                    <td class="text-end">${formatCurrency(b.paid_amount)}</td>
+                    <td class="text-end">${formatCurrency((b.total_amount || 0) - (b.paid_amount || 0))}</td>
+                    <td>${b.status}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="deleteBill(${b.id})"><i class="bi bi-trash"></i></button></td>
+                </tr>
+            `).join('') || '<tr><td colspan="8" class="text-center text-muted">No bills</td></tr>';
+            
+            const totals = (bills || []).reduce((acc, b) => {
+                acc.total += Number(b.total_amount) || 0;
+                acc.paid += Number(b.paid_amount) || 0;
+                return acc;
+            }, {total: 0, paid: 0});
+            const balance = totals.total - totals.paid;
+            
+            const body = `
+                <div class="mb-3"><strong>Supplier:</strong> ${supplierName}</div>
+                <div class="mb-3"><strong>Total:</strong> ${formatCurrency(totals.total)} | <strong>Paid:</strong> ${formatCurrency(totals.paid)} | <strong>Balance:</strong> ${formatCurrency(balance)}</div>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead class="table-light"><tr><th>Bill #</th><th>Date</th><th>Last Payment Date</th><th class="text-end">Total</th><th class="text-end">Paid</th><th class="text-end">Balance</th><th>Status</th><th>Action</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+            document.getElementById('detailsBody').innerHTML = body;
+            new bootstrap.Modal(document.getElementById('detailsModal')).show();
+        });
+}
+
+function addBill(event) {
+    event.preventDefault();
+    const data = {
+        supplier_name: document.getElementById('supplierName').value,
+        bill_number: document.getElementById('billNumber').value,
+        bill_date: document.getElementById('billDate').value,
+        total_amount: document.getElementById('billAmount').value,
+        description: document.getElementById('billDescription').value
+    };
+    
+    fetch('/api/supplier-bills', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(res => {
+        if (res.success) {
+            alert('Bill added successfully');
+            document.getElementById('addBillForm').reset();
+            // Switch to Bill History tab
+            document.querySelector('[href="#billHistory"]').click();
+            loadBills();
+        } else {
+            alert('Error: ' + (res.error || 'Failed to add bill'));
+        }
+    })
+    .catch(e => alert('Error: ' + e));
+}
+
+function deleteBill(billId) {
+    if (confirm('Delete this bill?')) {
+        fetch(`/api/supplier-bills/${billId}`, {method: 'DELETE'})
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    alert('Bill deleted');
+                    loadBills();
+                    bootstrap.Modal.getInstance(document.getElementById('detailsModal')).hide();
+                } else {
+                    alert('Error deleting bill');
+                }
+            })
+            .catch(e => alert('Error: ' + e));
+    }
+}
+
+document.getElementById('billDate').value = getISTDate();
+
+document.addEventListener('DOMContentLoaded', () => {
     loadBills();
-    loadSummary();
+});
 </script>
 {% endblock %}

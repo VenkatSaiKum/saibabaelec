@@ -25,7 +25,8 @@ class SupplierBillManager:
         if status:
             cursor.execute('''
                 SELECT id, supplier_name, bill_number, bill_date, total_amount, paid_amount, 
-                       status, description, due_date, created_at, paid_at
+                       status, description, due_date, created_at, paid_at,
+                       (SELECT MAX(payment_date) FROM supplier_bill_payments p WHERE p.bill_id = supplier_bills.id) as last_payment_date
                 FROM supplier_bills
                 WHERE status = ?
                 ORDER BY bill_date DESC, created_at DESC
@@ -33,7 +34,8 @@ class SupplierBillManager:
         else:
             cursor.execute('''
                 SELECT id, supplier_name, bill_number, bill_date, total_amount, paid_amount, 
-                       status, description, due_date, created_at, paid_at
+                       status, description, due_date, created_at, paid_at,
+                       (SELECT MAX(payment_date) FROM supplier_bill_payments p WHERE p.bill_id = supplier_bills.id) as last_payment_date
                 FROM supplier_bills
                 ORDER BY bill_date DESC, created_at DESC
             ''')
@@ -51,7 +53,8 @@ class SupplierBillManager:
                 'description': row[7],
                 'due_date': row[8],
                 'created_at': row[9],
-                'paid_at': row[10]
+                'paid_at': row[10],
+                'last_payment_date': row[11]
             })
         return bills
     
@@ -81,6 +84,98 @@ class SupplierBillManager:
                 'paid_at': row[10]
             }
         return None
+
+    def get_supplier_groups(self, status=None):
+        """Return aggregated rows per supplier with totals and last payment date"""
+        cursor = self.db.cursor
+        
+        if status:
+            query = '''
+                SELECT 
+                    supplier_name,
+                    COUNT(*) as bill_count,
+                    SUM(total_amount) as total_amount,
+                    SUM(paid_amount) as paid_amount,
+                    SUM(total_amount - paid_amount) as balance,
+                    MIN(bill_date) as first_bill_date,
+                    MAX(bill_date) as last_bill_date,
+                    SUM(CASE WHEN status != 'PAID' THEN 1 ELSE 0 END) as open_bills,
+                    MAX((SELECT MAX(p.payment_date) FROM supplier_bill_payments p WHERE p.bill_id IN (
+                        SELECT id FROM supplier_bills sb2 WHERE sb2.supplier_name = supplier_bills.supplier_name
+                    ))) as last_payment_date
+                FROM supplier_bills
+                WHERE status = ?
+                GROUP BY supplier_name
+                ORDER BY last_bill_date DESC, supplier_name ASC
+            '''
+            cursor.execute(query, (status,))
+        else:
+            query = '''
+                SELECT 
+                    supplier_name,
+                    COUNT(*) as bill_count,
+                    SUM(total_amount) as total_amount,
+                    SUM(paid_amount) as paid_amount,
+                    SUM(total_amount - paid_amount) as balance,
+                    MIN(bill_date) as first_bill_date,
+                    MAX(bill_date) as last_bill_date,
+                    SUM(CASE WHEN status != 'PAID' THEN 1 ELSE 0 END) as open_bills,
+                    MAX((SELECT MAX(p.payment_date) FROM supplier_bill_payments p WHERE p.bill_id IN (
+                        SELECT id FROM supplier_bills sb2 WHERE sb2.supplier_name = supplier_bills.supplier_name
+                    ))) as last_payment_date
+                FROM supplier_bills
+                GROUP BY supplier_name
+                ORDER BY last_bill_date DESC, supplier_name ASC
+            '''
+            cursor.execute(query)
+
+        groups = []
+        for row in cursor.fetchall():
+            supplier, bill_count, total_amount, paid_amount, balance, first_bill_date, last_bill_date, open_bills, last_payment_date = row
+            groups.append({
+                'supplier_name': supplier,
+                'bill_count': bill_count,
+                'total_amount': total_amount,
+                'paid_amount': paid_amount,
+                'balance': balance,
+                'first_bill_date': first_bill_date,
+                'last_bill_date': last_bill_date,
+                'open_bills': open_bills,
+                'last_payment_date': last_payment_date
+            })
+        return groups
+
+    def get_bills_by_supplier(self, supplier_name):
+        """Get all bills for a supplier with last payment date and history"""
+        cursor = self.db.cursor
+        cursor.execute('''
+            SELECT 
+                id, bill_number, bill_date, due_date, total_amount, paid_amount,
+                status, description, created_at, paid_at,
+                (SELECT MAX(payment_date) FROM supplier_bill_payments p WHERE p.bill_id = sb.id) as last_payment_date
+            FROM supplier_bills sb
+            WHERE supplier_name = ?
+            ORDER BY bill_date DESC, created_at DESC
+        ''', (supplier_name,))
+
+        bills = []
+        for row in cursor.fetchall():
+            bill_info = {
+                'id': row[0],
+                'bill_number': row[1],
+                'bill_date': row[2],
+                'due_date': row[3],
+                'total_amount': row[4],
+                'paid_amount': row[5],
+                'status': row[6],
+                'description': row[7],
+                'created_at': row[8],
+                'paid_at': row[9],
+                'last_payment_date': row[10]
+            }
+            bill_info['payment_history'] = self.get_payment_history(row[0])
+            bills.append(bill_info)
+        return bills
     
     def make_payment(self, bill_id, payment_amount, payment_date=None, notes=''):
         """Make a payment towards a bill"""
@@ -122,6 +217,78 @@ class SupplierBillManager:
         self.db.connection.commit()
         return True
     
+    def _get_supplier_bill_queue(self, supplier_name):
+        """Get unpaid/partial bills for a supplier in FIFO order"""
+        cursor = self.db.cursor
+        cursor.execute('''
+            SELECT id, bill_number, total_amount, paid_amount, bill_date
+            FROM supplier_bills
+            WHERE status != 'PAID' AND supplier_name = ?
+            ORDER BY bill_date ASC, id ASC
+        ''', (supplier_name,))
+        return cursor.fetchall() or []
+
+    def _apply_payment_to_supplier_bill(self, bill_id, total_amount, current_paid, apply_amount, payment_date, notes):
+        """Apply payment to a single supplier bill"""
+        cursor = self.db.cursor
+        new_paid_amount = float(current_paid) + apply_amount
+        new_status = 'PAID' if new_paid_amount + 0.01 >= float(total_amount) else 'PARTIAL'
+        
+        # Record payment
+        cursor.execute('''
+            INSERT INTO supplier_bill_payments (bill_id, payment_amount, payment_date, notes)
+            VALUES (?, ?, ?, ?)
+        ''', (bill_id, apply_amount, payment_date, notes))
+        
+        # Update bill
+        cursor.execute('''
+            UPDATE supplier_bills
+            SET paid_amount = ?, status = ?
+            WHERE id = ?
+        ''', (new_paid_amount, new_status, bill_id))
+        
+        self.db.connection.commit()
+        return True, new_status, new_paid_amount
+
+    def add_supplier_payment(self, supplier_name, payment_amount, payment_date, notes=""):
+        """Record payment towards supplier; cascades to unpaid bills FIFO"""
+        try:
+            payment_amount = float(payment_amount)
+        except:
+            return False, "Invalid amount", []
+        if payment_amount <= 0:
+            return False, "Payment amount must be positive", []
+        
+        queue = self._get_supplier_bill_queue(supplier_name)
+        remaining = payment_amount
+        allocations = []
+        
+        for bill in queue:
+            bill_id, bill_no, total_amt, paid_amt, bill_date = bill
+            balance = float(total_amt) - float(paid_amt)
+            if balance <= 0:
+                continue
+            apply_amt = min(balance, remaining)
+            success, new_status, new_paid = self._apply_payment_to_supplier_bill(
+                bill_id, total_amt, paid_amt, apply_amt, payment_date, notes
+            )
+            if not success:
+                return False, "Payment failed", allocations
+            allocations.append({
+                'bill_number': bill_no,
+                'applied': apply_amt,
+                'new_status': new_status,
+                'new_balance': float(total_amt) - float(new_paid)
+            })
+            remaining -= apply_amt
+            if remaining <= 0:
+                break
+        
+        if not allocations:
+            return False, "No eligible bills to apply payment", []
+        
+        return True, allocations[-1]['new_status'], allocations
+
     def mark_as_paid(self, bill_id, payment_date=None, notes=''):
         """Mark a bill as fully paid"""
         cursor = self.db.cursor

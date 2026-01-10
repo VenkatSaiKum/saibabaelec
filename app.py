@@ -704,7 +704,6 @@ def get_daily_expenses_summary():
 # ============ SUPPLIER BILLS ROUTES ============
 
 @app.route('/supplier-bills')
-@login_required
 def supplier_bills():
     """Supplier bills page"""
     return render_template('supplier_bills.html')
@@ -717,19 +716,59 @@ def wholesale_bills():
     return render_template('wholesale_bills.html')
 
 @app.route('/api/supplier-bills', methods=['GET'])
-@login_required
 def get_supplier_bills():
-    """Get all supplier bills with optional status filter"""
+    """Get supplier bills with optional status filter; aggregate when requested"""
     try:
         mgr = get_managers()
         status = request.args.get('status')
-        bills = mgr['supplier_bills'].get_all_bills(status)
+        aggregate = request.args.get('aggregate')
+        try:
+            if aggregate:
+                bills = mgr['supplier_bills'].get_supplier_groups(status)
+            else:
+                bills = mgr['supplier_bills'].get_all_bills(status)
+        except Exception as inner_e:
+            logger.error(f"Error in supplier bills query: {inner_e}")
+            return jsonify({'error': f"Database error: {str(inner_e)}"}), 500
+        return jsonify(bills), 200
+    except Exception as e:
+        logger.error(f"Error in get_supplier_bills: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/supplier-bills/supplier/<supplier_name>', methods=['GET'])
+def get_supplier_bills_by_supplier(supplier_name):
+    """Get all bills for a supplier with payment history"""
+    try:
+        mgr = get_managers()
+        bills = mgr['supplier_bills'].get_bills_by_supplier(supplier_name)
         return jsonify(bills), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/supplier-bills/supplier/<supplier_name>/pay', methods=['POST'])
+def pay_supplier_bills(supplier_name):
+    """Record payment for a supplier; cascades across unpaid bills FIFO"""
+    try:
+        data = request.json or {}
+        amount = data.get('payment_amount')
+        payment_date = data.get('payment_date') or datetime.now().strftime('%Y-%m-%d')
+        notes = data.get('notes', '')
+
+        if amount is None or amount == "":
+            success, status_text = True, 'PAID'
+            allocations = []
+        else:
+            success, status_text, allocations = get_managers()['supplier_bills'].add_supplier_payment(
+                supplier_name, amount, payment_date, notes
+            )
+
+        if success:
+            return jsonify({'success': True, 'status': status_text, 'allocations': allocations}), 200
+        return jsonify({'error': status_text or 'Failed to record payment'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/supplier-bills', methods=['POST'])
-@login_required
 def add_supplier_bill():
     """Add a new supplier bill"""
     try:
@@ -750,7 +789,6 @@ def add_supplier_bill():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/supplier-bills/<int:bill_id>', methods=['GET'])
-@login_required
 def get_supplier_bill(bill_id):
     """Get a single supplier bill by ID"""
     try:
@@ -765,7 +803,6 @@ def get_supplier_bill(bill_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/supplier-bills/<int:bill_id>/pay', methods=['POST'])
-@login_required
 def pay_supplier_bill(bill_id):
     """Make a payment towards a supplier bill"""
     try:
@@ -784,7 +821,6 @@ def pay_supplier_bill(bill_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/supplier-bills/<int:bill_id>', methods=['DELETE'])
-@login_required
 def delete_supplier_bill(bill_id):
     """Delete a supplier bill"""
     try:
@@ -795,7 +831,6 @@ def delete_supplier_bill(bill_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/supplier-bills/summary', methods=['GET'])
-@login_required
 def get_supplier_bills_summary():
     """Get summary statistics for supplier bills"""
     try:
@@ -891,6 +926,19 @@ def pay_credit_bill(bill_number):
         if success:
             return jsonify({'success': True, 'status': status_text, 'allocations': allocations}), 200
         return jsonify({'error': status_text or 'Failed to record payment'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/transactions/<int:transaction_id>', methods=['DELETE'])
+@admin_required
+def delete_transaction(transaction_id):
+    """Delete a transaction (credit/replacement bill)"""
+    try:
+        mgr = get_managers()
+        cursor = mgr['billing'].db.cursor
+        cursor.execute('DELETE FROM transactions WHERE id = ?', (transaction_id,))
+        mgr['billing'].db.connection.commit()
+        return jsonify({'success': True, 'message': 'Transaction deleted'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
