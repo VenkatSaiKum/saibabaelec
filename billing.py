@@ -286,17 +286,41 @@ class BillingManager:
     
     # -------- CREDIT (WHOLESALE) MANAGEMENT ---------
     def get_credit_bills(self, status=None, limit=200):
-        """Get credit bills with optional status filter"""
+        """Get credit customers aggregated (one row per customer)"""
         base = '''
-            SELECT id, bill_number, customer_name, total_amount, received_amount, credit_status, payment_method, created_at
-            FROM transactions
+            SELECT 
+                customer_name,
+                COUNT(*) as bill_count,
+                SUM(total_amount) as total_amount,
+                SUM(received_amount) as received_amount,
+                SUM(total_amount - received_amount) as balance,
+                MIN(created_at) as first_created,
+                MAX(created_at) as last_created,
+                SUM(CASE WHEN credit_status != 'PAID' THEN 1 ELSE 0 END) as open_bills,
+                SUM(CASE WHEN credit_status = 'PARTIAL' THEN 1 ELSE 0 END) as partial_bills,
+                SUM(CASE WHEN credit_status = 'UNPAID' THEN 1 ELSE 0 END) as unpaid_bills,
+                (
+                    SELECT bill_number 
+                    FROM transactions t2 
+                    WHERE t2.is_credit = 1 AND t2.customer_name = t.customer_name AND t2.credit_status != 'PAID'
+                    ORDER BY t2.created_at ASC, t2.id ASC
+                    LIMIT 1
+                ) as primary_bill_number
+            FROM transactions t
             WHERE is_credit = 1
+            GROUP BY customer_name
         '''
+        having = []
         params = []
-        if status:
-            base += " AND credit_status = ?"
-            params.append(status)
-        base += " ORDER BY created_at DESC LIMIT ?"
+        if status == 'PAID':
+            having.append('open_bills = 0')
+        elif status == 'PARTIAL':
+            having.append('open_bills > 0 AND received_amount > 0')
+        elif status == 'UNPAID':
+            having.append('open_bills > 0 AND received_amount = 0')
+        if having:
+            base += " HAVING " + " AND ".join(having)
+        base += " ORDER BY last_created DESC LIMIT ?"
         params.append(limit)
         return self.db.fetch_all(base, tuple(params))
 
@@ -328,26 +352,48 @@ class BillingManager:
             'payments': payments
         }
 
-    def add_credit_payment(self, bill_number, payment_amount, payment_date, notes=""):
-        """Record a payment towards a credit bill"""
-        bill = self.get_credit_bill(bill_number)
-        if not bill:
-            return False, "Bill not found"
-        try:
-            payment_amount = float(payment_amount)
-        except:
-            return False, "Invalid amount"
-        if payment_amount <= 0:
-            return False, "Payment amount must be positive"
+    def get_credit_bills_by_customer(self, customer_name):
+        """Get all credit bills for a customer ordered FIFO"""
+        bills = self.db.fetch_all(
+            '''SELECT id, bill_number, total_amount, received_amount, credit_status, created_at
+               FROM transactions
+               WHERE is_credit = 1 AND customer_name = ?
+               ORDER BY created_at ASC, id ASC''',
+            (customer_name,)
+        ) or []
+        result = []
+        for b in bills:
+            result.append({
+                'id': b[0],
+                'bill_number': b[1],
+                'total_amount': b[2],
+                'received_amount': b[3],
+                'balance': float(b[2]) - float(b[3]),
+                'credit_status': b[4],
+                'created_at': b[5]
+            })
+        return result
 
-        new_received = float(bill['received_amount']) + payment_amount
-        new_status = 'PAID' if new_received + 0.01 >= float(bill['total_amount']) else 'PARTIAL'
+    def _get_customer_credit_queue(self, customer_name):
+        """Get unpaid/partial credit bills for a customer in FIFO order"""
+        return self.db.fetch_all(
+            '''SELECT id, bill_number, total_amount, received_amount, created_at
+               FROM transactions
+               WHERE is_credit = 1 AND credit_status != 'PAID' AND customer_name = ?
+               ORDER BY created_at ASC, id ASC''',
+            (customer_name,)
+        ) or []
+
+    def _apply_payment_to_bill(self, txn_id, bill_number, current_received, total_amount, apply_amount, payment_date, notes):
+        """Apply payment to a single bill and persist rows"""
+        new_received = float(current_received) + apply_amount
+        new_status = 'PAID' if new_received + 0.01 >= float(total_amount) else 'PARTIAL'
 
         insert = '''
             INSERT INTO credit_bill_payments (transaction_id, payment_amount, payment_date, notes)
             VALUES (?, ?, ?, ?)
         '''
-        if not self.db.execute_query(insert, (bill['id'], payment_amount, payment_date, notes)):
+        if not self.db.execute_query(insert, (txn_id, apply_amount, payment_date, notes)):
             return False, "Failed to save payment"
 
         update = '''
@@ -355,24 +401,69 @@ class BillingManager:
             SET received_amount = ?, credit_status = ?
             WHERE id = ?
         '''
-        if not self.db.execute_query(update, (new_received, new_status, bill['id'])):
+        if not self.db.execute_query(update, (new_received, new_status, txn_id)):
             return False, "Failed to update bill status"
 
-        return True, new_status
+        return True, new_status, new_received
+
+    def add_credit_payment(self, bill_number, payment_amount, payment_date, notes=""):
+        """Record a payment towards a credit bill; cascades to other unpaid bills of same customer"""
+        bill = self.get_credit_bill(bill_number)
+        if not bill:
+            return False, "Bill not found", []
+        try:
+            payment_amount = float(payment_amount)
+        except:
+            return False, "Invalid amount", []
+        if payment_amount <= 0:
+            return False, "Payment amount must be positive", []
+
+        queue = self._get_customer_credit_queue(bill['customer_name'])
+        remaining = payment_amount
+        allocations = []
+
+        for txn in queue:
+            txn_id, txn_bill_no, total_amt, received_amt, created_at = txn
+            balance = float(total_amt) - float(received_amt)
+            if balance <= 0:
+                continue
+            apply_amt = min(balance, remaining)
+            success, new_status, new_received = self._apply_payment_to_bill(
+                txn_id, txn_bill_no, received_amt, total_amt, apply_amt, payment_date, notes
+            )
+            if not success:
+                return False, new_status, allocations
+            allocations.append({
+                'bill_number': txn_bill_no,
+                'applied': apply_amt,
+                'new_status': new_status,
+                'new_balance': float(total_amt) - float(new_received)
+            })
+            remaining -= apply_amt
+            if remaining <= 0:
+                break
+
+        if not allocations:
+            return False, "No eligible bills to apply payment", []
+
+        return True, allocations[-1]['new_status'], allocations
 
     def mark_credit_paid(self, bill_number, payment_date, notes="Settled"):
-        """Mark credit bill fully paid"""
+        """Mark credit bill fully paid (cascades if overpaid)"""
         bill = self.get_credit_bill(bill_number)
         if not bill:
             return False, "Bill not found"
-        remaining = float(bill['total_amount']) - float(bill['received_amount'])
-        if remaining <= 0:
+        total_balance = 0
+        queue = self._get_customer_credit_queue(bill['customer_name'])
+        for txn in queue:
+            _, _, total_amt, received_amt, _ = txn
+            total_balance += float(total_amt) - float(received_amt)
+        if total_balance <= 0:
             # already paid
-            update = '''UPDATE transactions SET credit_status='PAID' WHERE id=?'''
-            self.db.execute_query(update, (bill['id'],))
+            self.db.execute_query("UPDATE transactions SET credit_status='PAID' WHERE id=?", (bill['id'],))
             return True, 'PAID'
 
-        success, _ = self.add_credit_payment(bill_number, remaining, payment_date, notes)
+        success, _, allocations = self.add_credit_payment(bill_number, total_balance, payment_date, notes)
         return success, 'PAID' if success else 'UNPAID'
 
     def get_credit_summary(self):

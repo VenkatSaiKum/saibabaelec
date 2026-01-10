@@ -810,26 +810,43 @@ def get_supplier_bills_summary():
 @app.route('/api/credit-bills', methods=['GET'])
 @admin_required
 def get_credit_bills():
-    """List credit (wholesale) bills with optional status filter"""
+    """List credit customers aggregated (one row per customer)"""
     try:
         status = request.args.get('status')
         limit = request.args.get('limit', 200, type=int)
         bills = get_managers()['billing'].get_credit_bills(status, limit)
         result = []
         for b in bills:
-            bill_id, bill_no, customer, total, received, status_text, payment_method, created = b
+            customer, bill_count, total, received, balance, first_created, last_created, open_bills, partial_bills, unpaid_bills, primary_bill = b
+            if open_bills == 0:
+                status_text = 'PAID'
+            elif received and received > 0:
+                status_text = 'PARTIAL'
+            else:
+                status_text = 'UNPAID'
             result.append({
-                'id': bill_id,
-                'bill_number': bill_no,
                 'customer_name': customer,
+                'bill_count': bill_count,
                 'total_amount': total,
                 'received_amount': received,
-                'balance': float(total) - float(received),
+                'balance': balance,
                 'credit_status': status_text,
-                'payment_method': payment_method,
-                'created_at': created
+                'primary_bill_number': primary_bill,
+                'first_created_at': first_created,
+                'last_created_at': last_created,
+                'open_bills': open_bills
             })
         return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/credit-bills/customer/<customer_name>', methods=['GET'])
+@admin_required
+def get_credit_bills_customer(customer_name):
+    """Get all credit bills for a specific customer"""
+    try:
+        bills = get_managers()['billing'].get_credit_bills_by_customer(customer_name)
+        return jsonify(bills), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -867,11 +884,12 @@ def pay_credit_bill(bill_number):
 
         if amount is None or amount == "":
             success, status_text = get_managers()['billing'].mark_credit_paid(bill_number, payment_date, notes or 'Settled')
+            allocations = []
         else:
-            success, status_text = get_managers()['billing'].add_credit_payment(bill_number, amount, payment_date, notes)
+            success, status_text, allocations = get_managers()['billing'].add_credit_payment(bill_number, amount, payment_date, notes)
 
         if success:
-            return jsonify({'success': True, 'status': status_text}), 200
+            return jsonify({'success': True, 'status': status_text, 'allocations': allocations}), 200
         return jsonify({'error': status_text or 'Failed to record payment'}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500

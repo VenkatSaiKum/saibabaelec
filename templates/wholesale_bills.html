@@ -65,9 +65,9 @@
             <table class="table table-hover">
                 <thead class="table-dark">
                     <tr>
-                        <th>Bill #</th>
                         <th>Customer</th>
-                        <th>Date</th>
+                        <th>Bills</th>
+                        <th>First Bill</th>
                         <th class="text-end">Total</th>
                         <th class="text-end">Received</th>
                         <th class="text-end">Balance</th>
@@ -172,38 +172,40 @@ function loadCreditBills(){
 function renderCreditBills(){
     const tbody = document.getElementById('creditBody');
     if(!creditBills.length){
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No credit bills</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No credit customers</td></tr>';
         return;
     }
-    tbody.innerHTML = creditBills.map(b => {
-        const badgeClass = b.credit_status === 'PAID' ? 'bg-success' : (b.credit_status === 'PARTIAL' ? 'bg-info' : 'bg-danger');
+    tbody.innerHTML = creditBills.map(c => {
+        const badgeClass = c.credit_status === 'PAID' ? 'bg-success' : (c.credit_status === 'PARTIAL' ? 'bg-info' : 'bg-danger');
+        const primaryBill = c.primary_bill_number || '';
         return `
             <tr>
-                <td>${b.bill_number}</td>
-                <td>${b.customer_name}</td>
-                <td>${b.created_at || ''}</td>
-                <td class="text-end">${formatCurrency(b.total_amount)}</td>
-                <td class="text-end">${formatCurrency(b.received_amount)}</td>
-                <td class="text-end">${formatCurrency(b.balance)}</td>
-                <td><span class="badge ${badgeClass}">${b.credit_status}</span></td>
+                <td>${c.customer_name}</td>
+                <td>${c.bill_count}</td>
+                <td>${c.first_created_at || ''}</td>
+                <td class="text-end">${formatCurrency(c.total_amount)}</td>
+                <td class="text-end">${formatCurrency(c.received_amount)}</td>
+                <td class="text-end">${formatCurrency(c.balance)}</td>
+                <td><span class="badge ${badgeClass}">${c.credit_status}</span></td>
                 <td>
-                    <button class="btn btn-sm btn-primary" onclick="viewCreditDetail('${b.bill_number}')"><i class="bi bi-eye"></i></button>
-                    <button class="btn btn-sm btn-success" onclick="openPaymentModal('${b.bill_number}')"><i class="bi bi-cash-coin"></i></button>
+                    <button class="btn btn-sm btn-primary" onclick="viewCreditDetailCustomer('${c.customer_name}')"><i class="bi bi-eye"></i></button>
+                    <button class="btn btn-sm btn-success" onclick="openPaymentModalCustomer('${c.customer_name}', '${primaryBill}')"><i class="bi bi-cash-coin"></i></button>
                 </td>
             </tr>
         `;
     }).join('');
 }
 
-function openPaymentModal(billNo){
-    const bill = creditBills.find(b => b.bill_number === billNo);
-    if(!bill) return;
-    document.getElementById('payBillNumber').value = bill.bill_number;
-    document.getElementById('payCustomer').textContent = bill.customer_name;
-    document.getElementById('payBillNo').textContent = bill.bill_number;
-    document.getElementById('payTotal').textContent = formatCurrency(bill.total_amount);
-    document.getElementById('payReceived').textContent = formatCurrency(bill.received_amount);
-    document.getElementById('payBalance').textContent = formatCurrency(bill.balance);
+function openPaymentModalCustomer(customerName, primaryBill){
+    document.getElementById('payBillNumber').value = primaryBill;
+    document.getElementById('payCustomer').textContent = customerName;
+    document.getElementById('payBillNo').textContent = primaryBill || 'N/A';
+    const cust = creditBills.find(c => c.customer_name === customerName);
+    if(cust){
+        document.getElementById('payTotal').textContent = formatCurrency(cust.total_amount);
+        document.getElementById('payReceived').textContent = formatCurrency(cust.received_amount);
+        document.getElementById('payBalance').textContent = formatCurrency(cust.balance);
+    }
     document.getElementById('payAmount').value = '';
     document.getElementById('payNotes').value = '';
     document.getElementById('payDate').value = new Date().toISOString().slice(0,10);
@@ -228,40 +230,47 @@ function submitCreditPayment(){
         if(res.success){
             bootstrap.Modal.getInstance(document.getElementById('creditPaymentModal')).hide();
             loadCreditBills();
+            if(res.allocations && res.allocations.length){
+                const lines = res.allocations.map(a => `${a.bill_number}: applied ${formatCurrency(a.applied)} (balance ${formatCurrency(a.new_balance)})`).join('\n');
+                alert('Payment applied:\n' + lines);
+            }
         }else{
             alert(res.error || 'Payment failed');
         }
       });
 }
 
-function viewCreditDetail(billNo){
-    fetch(`/api/credit-bills/${billNo}`)
+function viewCreditDetailCustomer(customerName){
+    fetch(`/api/credit-bills/customer/${encodeURIComponent(customerName)}`)
         .then(r=>r.json())
-        .then(bill => {
-            if(bill.error){
-                alert(bill.error);
+        .then(bills => {
+            if(bills.error){
+                alert(bills.error);
                 return;
             }
-            const paymentsRows = (bill.payments || []).map(p => `
+            const rows = (bills || []).map(b => `
                 <tr>
-                    <td>${p.payment_date}</td>
-                    <td class="text-end">${formatCurrency(p.payment_amount)}</td>
-                    <td>${p.notes || ''}</td>
+                    <td>${b.bill_number}</td>
+                    <td>${b.created_at || ''}</td>
+                    <td class="text-end">${formatCurrency(b.total_amount)}</td>
+                    <td class="text-end">${formatCurrency(b.received_amount)}</td>
+                    <td class="text-end">${formatCurrency(b.balance)}</td>
+                    <td>${b.credit_status}</td>
                 </tr>
-            `).join('') || '<tr><td colspan="3" class="text-center text-muted">No payments yet</td></tr>';
+            `).join('') || '<tr><td colspan="6" class="text-center text-muted">No bills</td></tr>';
+            const totals = (bills || []).reduce((acc,b)=>{
+                acc.total += Number(b.total_amount)||0;
+                acc.received += Number(b.received_amount)||0;
+                return acc;
+            }, {total:0, received:0});
+            const balance = totals.total - totals.received;
             const body = `
-                <div class="mb-2"><strong>Bill #:</strong> ${bill.bill_number}</div>
-                <div class="mb-2"><strong>Customer:</strong> ${bill.customer_name}</div>
-                <div class="mb-2"><strong>Date:</strong> ${bill.created_at || ''}</div>
-                <div class="mb-2"><strong>Total:</strong> ${formatCurrency(bill.total_amount)}</div>
-                <div class="mb-2"><strong>Received:</strong> ${formatCurrency(bill.received_amount)}</div>
-                <div class="mb-2"><strong>Balance:</strong> ${formatCurrency(bill.balance)}</div>
-                <hr>
-                <h6>Payments</h6>
+                <div class="mb-2"><strong>Customer:</strong> ${customerName}</div>
+                <div class="mb-2"><strong>Total:</strong> ${formatCurrency(totals.total)} | <strong>Received:</strong> ${formatCurrency(totals.received)} | <strong>Balance:</strong> ${formatCurrency(balance)}</div>
                 <div class="table-responsive">
                     <table class="table table-sm">
-                        <thead class="table-light"><tr><th>Date</th><th class="text-end">Amount</th><th>Notes</th></tr></thead>
-                        <tbody>${paymentsRows}</tbody>
+                        <thead class="table-light"><tr><th>Bill #</th><th>Date</th><th class="text-end">Total</th><th class="text-end">Received</th><th class="text-end">Balance</th><th>Status</th></tr></thead>
+                        <tbody>${rows}</tbody>
                     </table>
                 </div>
             `;
