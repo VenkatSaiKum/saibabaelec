@@ -11,8 +11,8 @@ from billing import BillingManager
 from expenses import ExpenseManager
 from supplier_bills import SupplierBillManager
 from cleanup_old_records import DatabaseCleaner
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
+# from apscheduler.schedulers.background import BackgroundScheduler
+# from apscheduler.triggers.cron import CronTrigger
 import json
 from datetime import datetime
 import io
@@ -27,33 +27,33 @@ CORS(app)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize background scheduler for automatic cleanup
-scheduler = BackgroundScheduler()
+# Initialize background scheduler for automatic cleanup - COMMENTED OUT FOR NOW
+# scheduler = BackgroundScheduler()
 
-def run_weekly_cleanup():
-    """Run database cleanup automatically every Sunday at 2 AM"""
-    try:
-        logger.info("Starting automatic weekly database cleanup...")
-        cleaner = DatabaseCleaner()
-        cleaner.cleanup()
-        cleaner.close()
-        logger.info("Weekly cleanup completed successfully")
-    except Exception as e:
-        logger.error(f"Error during weekly cleanup: {e}")
+# def run_weekly_cleanup():
+#     """Run database cleanup automatically every Sunday at 2 AM"""
+#     try:
+#         logger.info("Starting automatic weekly database cleanup...")
+#         cleaner = DatabaseCleaner()
+#         cleaner.cleanup()
+#         cleaner.close()
+#         logger.info("Weekly cleanup completed successfully")
+#     except Exception as e:
+#         logger.error(f"Error during weekly cleanup: {e}")
 
 # Schedule cleanup for every Sunday at 2 AM
-scheduler.add_job(
-    func=run_weekly_cleanup,
-    trigger=CronTrigger(day_of_week=6, hour=2, minute=0),
-    id='weekly_cleanup',
-    name='Weekly Database Cleanup',
-    replace_existing=True
-)
+# scheduler.add_job(
+#     func=run_weekly_cleanup,
+#     trigger=CronTrigger(day_of_week=6, hour=2, minute=0),
+#     id='weekly_cleanup',
+#     name='Weekly Database Cleanup',
+#     replace_existing=True
+# )
 
 # Start scheduler immediately when app starts
-if not scheduler.running:
-    scheduler.start()
-    logger.info("Background scheduler started - automatic cleanup enabled")
+# if not scheduler.running:
+#     scheduler.start()
+#     logger.info("Background scheduler started - automatic cleanup enabled")
 
 def get_managers():
     """Get or create managers for current request"""
@@ -84,6 +84,17 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def admin_required(f):
+    """Decorator to require admin role for routes"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session:
+            return redirect(url_for('login'))
+        if session.get('role') != 'admin':
+            return redirect(url_for('billing_page'))  # Staff can only access billing and expenses
+        return f(*args, **kwargs)
+    return decorated_function
+
 # ============ AUTHENTICATION ROUTES ============
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -93,16 +104,25 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        # Credentials: admin / saibaba99
+        # Admin credentials: admin / saibaba99
+        # Staff credentials: staff / staff123
         if username == 'admin' and password == 'saibaba99':
             session['logged_in'] = True
             session['username'] = username
+            session['role'] = 'admin'
             return redirect(url_for('index'))
+        elif username == 'staff' and password == 'staff123':
+            session['logged_in'] = True
+            session['username'] = username
+            session['role'] = 'staff'
+            return redirect(url_for('billing_page'))  # Staff goes directly to billing
         else:
             return render_template('login.html', error='Invalid username or password')
     
     # If already logged in, redirect to dashboard
     if 'logged_in' in session:
+        if session.get('role') == 'staff':
+            return redirect(url_for('billing_page'))
         return redirect(url_for('index'))
     
     return render_template('login.html')
@@ -118,11 +138,13 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    """Dashboard home page"""
+    """Dashboard home page - admin only"""
+    if session.get('role') == 'staff':
+        return redirect(url_for('billing_page'))
     return render_template('index.html')
 
 @app.route('/api/dashboard')
-@login_required
+@admin_required
 def get_dashboard_data():
     """Get dashboard statistics"""
     try:
@@ -154,9 +176,9 @@ def get_dashboard_data():
 # ============ PRODUCT ROUTES ============
 
 @app.route('/products')
-@login_required
+@admin_required
 def products_page():
-    """Products management page"""
+    """Products management page - admin only"""
     return render_template('products.html')
 
 @app.route('/api/products')
@@ -167,7 +189,6 @@ def get_products():
         products = get_managers()['products'].get_all_products()
         if not products:
             return jsonify([]), 200
-        
         result = []
         for product in products:
             result.append({
@@ -193,6 +214,7 @@ def add_product():
             data['name'],
             data['category'],
             float(data['unit_price']),
+
             int(data['quantity']),
             int(data['minimum_stock'])
         ):
@@ -215,6 +237,7 @@ def update_product(product_id):
             unit_price=float(data['unit_price']) if data.get('unit_price') else None,
             minimum_stock=int(data['minimum_stock']) if data.get('minimum_stock') else None
         ):
+
             return jsonify({'success': True, 'message': 'Product updated'}), 200
         else:
             return jsonify({'error': 'Failed to update product'}), 400
@@ -236,9 +259,10 @@ def delete_product(product_id):
 # ============ STOCK ROUTES ============
 
 @app.route('/stock')
-@login_required
+
+@admin_required
 def stock_page():
-    """Stock management page"""
+    """Stock management page - admin only"""
     return render_template('stock.html')
 
 @app.route('/api/stock-report')
@@ -350,7 +374,8 @@ def create_bill():
             items_list,
             data.get('payment_method', 'CASH'),
             data.get('cash_amount'),
-            data.get('upi_amount')
+            data.get('upi_amount'),
+            data.get('bill_type', 'REGULAR')
         )
         
         if bill_number:
@@ -459,7 +484,7 @@ def get_bill_detail(bill_number):
 @app.route('/api/sales/daily')
 @login_required
 def get_daily_sales():
-    """Get daily sales"""
+    """Get daily sales - excludes credit and replacement transactions"""
     try:
         date = request.args.get('date')
         bills = get_managers()['billing'].get_daily_sales(date)
@@ -480,6 +505,55 @@ def get_daily_sales():
             total += amount
         
         return jsonify({'items': result, 'total': total}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/sales/credit')
+@login_required
+def get_credit_transactions():
+    """Get credit transactions (Wholesale customers on credit)"""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        transactions = get_managers()['billing'].get_credit_transactions(limit)
+        
+        if not transactions:
+            return jsonify([]), 200
+        
+        result = []
+        for txn in transactions:
+            result.append({
+                'bill_number': txn[0],
+                'customer_name': txn[1],
+                'total_amount': txn[2],
+                'payment_method': txn[3],
+                'created_at': txn[4]
+            })
+        
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/sales/replacements')
+@login_required
+def get_replacement_transactions():
+    """Get replacement transactions"""
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        transactions = get_managers()['billing'].get_replacement_transactions(limit)
+        
+        if not transactions:
+            return jsonify([]), 200
+        
+        result = []
+        for txn in transactions:
+            result.append({
+                'bill_number': txn[0],
+                'customer_name': txn[1],
+                'total_amount': txn[2],
+                'created_at': txn[3]
+            })
+        
+        return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -635,6 +709,13 @@ def supplier_bills():
     """Supplier bills page"""
     return render_template('supplier_bills.html')
 
+# Wholesale credit bills (customer credit) page
+@app.route('/wholesale-bills')
+@admin_required
+def wholesale_bills():
+    """Wholesale credit bills page"""
+    return render_template('wholesale_bills.html')
+
 @app.route('/api/supplier-bills', methods=['GET'])
 @login_required
 def get_supplier_bills():
@@ -721,6 +802,101 @@ def get_supplier_bills_summary():
         mgr = get_managers()
         summary = mgr['supplier_bills'].get_summary()
         return jsonify(summary), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============ WHOLESALE CREDIT BILLS ROUTES ============
+
+@app.route('/api/credit-bills', methods=['GET'])
+@admin_required
+def get_credit_bills():
+    """List credit (wholesale) bills with optional status filter"""
+    try:
+        status = request.args.get('status')
+        limit = request.args.get('limit', 200, type=int)
+        bills = get_managers()['billing'].get_credit_bills(status, limit)
+        result = []
+        for b in bills:
+            bill_id, bill_no, customer, total, received, status_text, payment_method, created = b
+            result.append({
+                'id': bill_id,
+                'bill_number': bill_no,
+                'customer_name': customer,
+                'total_amount': total,
+                'received_amount': received,
+                'balance': float(total) - float(received),
+                'credit_status': status_text,
+                'payment_method': payment_method,
+                'created_at': created
+            })
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/credit-bills/<bill_number>', methods=['GET'])
+@admin_required
+def get_credit_bill_detail(bill_number):
+    """Get single credit bill with payment history"""
+    try:
+        bill = get_managers()['billing'].get_credit_bill(bill_number)
+        if not bill:
+            return jsonify({'error': 'Bill not found'}), 404
+        payments_fmt = []
+        for p in bill['payments']:
+            payments_fmt.append({
+                'id': p[0],
+                'payment_amount': p[1],
+                'payment_date': p[2],
+                'notes': p[3],
+                'created_at': p[4]
+            })
+        bill['payments'] = payments_fmt
+        return jsonify(bill), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/credit-bills/<bill_number>/pay', methods=['POST'])
+@admin_required
+def pay_credit_bill(bill_number):
+    """Record payment for a credit bill; empty amount marks fully paid"""
+    try:
+        data = request.json or {}
+        amount = data.get('payment_amount')
+        notes = data.get('notes', '')
+        payment_date = data.get('payment_date') or datetime.now().strftime('%Y-%m-%d')
+
+        if amount is None or amount == "":
+            success, status_text = get_managers()['billing'].mark_credit_paid(bill_number, payment_date, notes or 'Settled')
+        else:
+            success, status_text = get_managers()['billing'].add_credit_payment(bill_number, amount, payment_date, notes)
+
+        if success:
+            return jsonify({'success': True, 'status': status_text}), 200
+        return jsonify({'error': status_text or 'Failed to record payment'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/credit-bills/summary', methods=['GET'])
+@admin_required
+def credit_bills_summary():
+    """Summary totals for credit bills"""
+    try:
+        summary = get_managers()['billing'].get_credit_summary()
+        if not summary:
+            return jsonify({
+                'unpaid_count': 0,
+                'partial_count': 0,
+                'paid_count': 0,
+                'total_balance': 0,
+                'total_credit': 0
+            }), 200
+        return jsonify({
+            'unpaid_count': summary[0] or 0,
+            'partial_count': summary[1] or 0,
+            'paid_count': summary[2] or 0,
+            'total_balance': float(summary[3] or 0),
+            'total_credit': float(summary[4] or 0)
+        }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

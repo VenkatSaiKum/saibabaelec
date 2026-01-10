@@ -59,6 +59,11 @@ class Database:
                 cash_amount REAL,
                 upi_amount REAL,
                 bill_number TEXT UNIQUE NOT NULL,
+                bill_type TEXT DEFAULT 'REGULAR',
+                is_credit INTEGER DEFAULT 0,
+                is_replacement INTEGER DEFAULT 0,
+                received_amount REAL DEFAULT 0,
+                credit_status TEXT DEFAULT 'UNPAID',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -118,6 +123,45 @@ class Database:
                 FOREIGN KEY (bill_id) REFERENCES supplier_bills(id)
             )
         ''')
+
+        # Credit Bill Payments table (for wholesale credit customers)
+        self.cursor.execute('''
+            CREATE TABLE IF NOT EXISTS credit_bill_payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                transaction_id INTEGER NOT NULL,
+                payment_amount REAL NOT NULL,
+                payment_date TEXT NOT NULL,
+                notes TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+            )
+        ''')
+
+        # Add columns to existing transactions table if they don't exist
+        try:
+            self.cursor.execute("ALTER TABLE transactions ADD COLUMN bill_type TEXT DEFAULT 'REGULAR'")
+        except:
+            pass  # Column already exists
+        
+        try:
+            self.cursor.execute("ALTER TABLE transactions ADD COLUMN is_credit INTEGER DEFAULT 0")
+        except:
+            pass  # Column already exists
+        
+        try:
+            self.cursor.execute("ALTER TABLE transactions ADD COLUMN is_replacement INTEGER DEFAULT 0")
+        except:
+            pass  # Column already exists
+
+        try:
+            self.cursor.execute("ALTER TABLE transactions ADD COLUMN received_amount REAL DEFAULT 0")
+        except:
+            pass  # Column already exists
+
+        try:
+            self.cursor.execute("ALTER TABLE transactions ADD COLUMN credit_status TEXT DEFAULT 'UNPAID'")
+        except:
+            pass  # Column already exists
 
         self.connection.commit()
 

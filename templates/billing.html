@@ -29,21 +29,30 @@
                     </div>
                     <div class="card-body">
                         <div class="row mb-3">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label class="form-label">Customer Name *</label>
                                 <input type="text" class="form-control" id="customerName" placeholder="Enter customer name" required>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label class="form-label">Date *</label>
                                 <input type="date" class="form-control" id="billDate" required>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label class="form-label">Payment Method *</label>
                                 <select class="form-select" id="paymentMethod" required onchange="toggleMixedPayment()">
                                     <option value="CASH">Cash</option>
                                     <option value="UPI">UPI</option>
                                     <option value="MIXED">Mixed (Cash + UPI)</option>
                                 </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Bill Type *</label>
+                                <select class="form-select" id="billType" required>
+                                    <option value="REGULAR">Regular Sale</option>
+                                    <option value="CREDIT">Credit (Wholesale)</option>
+                                    <option value="REPLACEMENT">Replacement</option>
+                                </select>
+                                <small class="text-muted">Credit & Replacement don't count in today's sales</small>
                             </div>
                         </div>
                         <div id="mixedPaymentFields" class="mt-3" style="display: none;">
@@ -448,6 +457,7 @@
     function createBill() {
         const customerName = document.getElementById('customerName').value;
         const paymentMethod = document.getElementById('paymentMethod').value;
+        const billType = document.getElementById('billType').value;
 
         if (!customerName || billItems.length === 0) {
             alert('Please enter customer name and add items');
@@ -457,6 +467,7 @@
         const billData = {
             customer_name: customerName,
             payment_method: paymentMethod,
+            bill_type: billType,
             items: billItems.map(item => ({
                 product_id: item.product_id,
                 quantity: item.quantity,
@@ -479,7 +490,13 @@
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                alert('Bill created successfully!');
+                let billTypeMsg = '';
+                if (billType === 'CREDIT') {
+                    billTypeMsg = '\n(Added to Wholesale Customers on Credit - Not counted in today\'s sales)';
+                } else if (billType === 'REPLACEMENT') {
+                    billTypeMsg = '\n(Replacement - Stock reduced but not counted in today\'s sales)';
+                }
+                alert('Bill created successfully!' + billTypeMsg);
                 viewBillDetail(data.bill_number);
                 clearBill();
                 loadBillHistory();

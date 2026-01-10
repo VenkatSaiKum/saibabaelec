@@ -21,6 +21,7 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
+                    {% if session.get('role') == 'admin' %}
                     <li class="nav-item">
                         <a class="nav-link" href="/">
                             <i class="bi bi-house"></i> Dashboard
@@ -36,6 +37,7 @@
                             <i class="bi bi-stack"></i> Stock
                         </a>
                     </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link" href="/billing">
                             <i class="bi bi-receipt"></i> Billing
@@ -46,15 +48,28 @@
                             <i class="bi bi-cash-coin"></i> Expenses
                         </a>
                     </li>
+                    {% if session.get('role') == 'admin' %}
                     <li class="nav-item">
                         <a class="nav-link" href="/supplier-bills">
                             <i class="bi bi-file-earmark-text"></i> Supplier Bills
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/wholesale-bills">
+                            <i class="bi bi-people"></i> Wholesale Credit Bills
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/reports">
                             <i class="bi bi-graph-up"></i> Reports
                         </a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <span class="nav-link text-info">
+                            <i class="bi bi-person-circle"></i> {{ session.get('username', 'User') }}
+                            {% if session.get('role') == 'staff' %}<small>(Staff)</small>{% endif %}
+                        </span>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link text-danger" href="/logout">

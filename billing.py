@@ -6,15 +6,20 @@ class BillingManager:
     def __init__(self):
         self.db = Database()
 
-    def create_bill(self, customer_name, items_list, payment_method="CASH", cash_amount=None, upi_amount=None):
+    def create_bill(self, customer_name, items_list, payment_method="CASH", cash_amount=None, upi_amount=None, bill_type="REGULAR"):
         """
         Create a bill/transaction
         items_list: [(product_id, quantity, unit_price, product_name), ...]
         product_id can be 0 for manual items (no stock tracking)
+        bill_type: REGULAR, CREDIT, or REPLACEMENT
         """
         if not items_list:
             print("✗ Bill must have at least one item")
             return None
+
+        # Validate bill_type
+        if bill_type not in ["REGULAR", "CREDIT", "REPLACEMENT"]:
+            bill_type = "REGULAR"
 
         # Generate bill number
         bill_number = self._generate_bill_number()
@@ -99,11 +104,16 @@ class BillingManager:
 
         # Create transaction
         ist_time = get_ist_datetime()
+        is_credit = 1 if bill_type == "CREDIT" else 0
+        is_replacement = 1 if bill_type == "REPLACEMENT" else 0
+        received_amount = 0 if is_credit else total_amount
+        credit_status = 'UNPAID' if is_credit else 'PAID'
+        
         transaction_query = '''
-            INSERT INTO transactions (customer_name, total_amount, payment_method, bill_number, cash_amount, upi_amount, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO transactions (customer_name, total_amount, payment_method, bill_number, cash_amount, upi_amount, bill_type, is_credit, is_replacement, received_amount, credit_status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         '''
-        if not self.db.execute_query(transaction_query, (customer_name, total_amount, payment_method, bill_number, cash_amount, upi_amount, ist_time)):
+        if not self.db.execute_query(transaction_query, (customer_name, total_amount, payment_method, bill_number, cash_amount, upi_amount, bill_type, is_credit, is_replacement, received_amount, credit_status, ist_time)):
             print("✗ Failed to create transaction")
             return None
 
@@ -247,20 +257,22 @@ class BillingManager:
         print(f"Total Sales (Shown): ₹{total_sales:.2f}\n")
 
     def get_daily_sales(self, date=None):
-        """Get sales for a specific date"""
+        """Get sales for a specific date - excludes credit and replacement transactions"""
         if date is None:
             date = datetime.now().strftime("%Y-%m-%d")
 
         query = '''
             SELECT bill_number, customer_name, total_amount, created_at
             FROM transactions
-            WHERE DATE(created_at) = ?
+            WHERE DATE(created_at) = ? 
+            AND is_credit = 0 
+            AND is_replacement = 0
             ORDER BY created_at DESC
         '''
         return self.db.fetch_all(query, (date,))
 
     def get_sales_summary(self):
-        """Get sales summary statistics"""
+        """Get sales summary statistics - excludes credit and replacement transactions"""
         query = '''
             SELECT 
                 COUNT(*) as total_bills,
@@ -268,8 +280,134 @@ class BillingManager:
                 AVG(total_amount) as avg_bill_value,
                 MAX(total_amount) as max_bill_value
             FROM transactions
+            WHERE is_credit = 0 AND is_replacement = 0
         '''
         return self.db.fetch_one(query)
+    
+    # -------- CREDIT (WHOLESALE) MANAGEMENT ---------
+    def get_credit_bills(self, status=None, limit=200):
+        """Get credit bills with optional status filter"""
+        base = '''
+            SELECT id, bill_number, customer_name, total_amount, received_amount, credit_status, payment_method, created_at
+            FROM transactions
+            WHERE is_credit = 1
+        '''
+        params = []
+        if status:
+            base += " AND credit_status = ?"
+            params.append(status)
+        base += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        return self.db.fetch_all(base, tuple(params))
+
+    def get_credit_bill(self, bill_number):
+        """Get single credit bill with payment history"""
+        txn = self.db.fetch_one(
+            '''SELECT id, bill_number, customer_name, total_amount, received_amount, credit_status, payment_method, created_at
+               FROM transactions WHERE bill_number = ? AND is_credit = 1''',
+            (bill_number,)
+        )
+        if not txn:
+            return None
+        txn_id = txn[0]
+        payments = self.db.fetch_all(
+            '''SELECT id, payment_amount, payment_date, notes, created_at
+               FROM credit_bill_payments WHERE transaction_id = ? ORDER BY payment_date DESC, id DESC''',
+            (txn_id,)
+        ) or []
+        return {
+            'id': txn_id,
+            'bill_number': txn[1],
+            'customer_name': txn[2],
+            'total_amount': txn[3],
+            'received_amount': txn[4],
+            'credit_status': txn[5],
+            'payment_method': txn[6],
+            'created_at': txn[7],
+            'balance': float(txn[3]) - float(txn[4]),
+            'payments': payments
+        }
+
+    def add_credit_payment(self, bill_number, payment_amount, payment_date, notes=""):
+        """Record a payment towards a credit bill"""
+        bill = self.get_credit_bill(bill_number)
+        if not bill:
+            return False, "Bill not found"
+        try:
+            payment_amount = float(payment_amount)
+        except:
+            return False, "Invalid amount"
+        if payment_amount <= 0:
+            return False, "Payment amount must be positive"
+
+        new_received = float(bill['received_amount']) + payment_amount
+        new_status = 'PAID' if new_received + 0.01 >= float(bill['total_amount']) else 'PARTIAL'
+
+        insert = '''
+            INSERT INTO credit_bill_payments (transaction_id, payment_amount, payment_date, notes)
+            VALUES (?, ?, ?, ?)
+        '''
+        if not self.db.execute_query(insert, (bill['id'], payment_amount, payment_date, notes)):
+            return False, "Failed to save payment"
+
+        update = '''
+            UPDATE transactions
+            SET received_amount = ?, credit_status = ?
+            WHERE id = ?
+        '''
+        if not self.db.execute_query(update, (new_received, new_status, bill['id'])):
+            return False, "Failed to update bill status"
+
+        return True, new_status
+
+    def mark_credit_paid(self, bill_number, payment_date, notes="Settled"):
+        """Mark credit bill fully paid"""
+        bill = self.get_credit_bill(bill_number)
+        if not bill:
+            return False, "Bill not found"
+        remaining = float(bill['total_amount']) - float(bill['received_amount'])
+        if remaining <= 0:
+            # already paid
+            update = '''UPDATE transactions SET credit_status='PAID' WHERE id=?'''
+            self.db.execute_query(update, (bill['id'],))
+            return True, 'PAID'
+
+        success, _ = self.add_credit_payment(bill_number, remaining, payment_date, notes)
+        return success, 'PAID' if success else 'UNPAID'
+
+    def get_credit_summary(self):
+        """Summary stats for credit bills"""
+        summary = self.db.fetch_one(
+            '''SELECT 
+                   COUNT(*) FILTER (WHERE credit_status='UNPAID') as unpaid_count,
+                   COUNT(*) FILTER (WHERE credit_status='PARTIAL') as partial_count,
+                   COUNT(*) FILTER (WHERE credit_status='PAID') as paid_count,
+                   SUM(total_amount - received_amount) as total_balance,
+                   SUM(total_amount) as total_credit
+               FROM transactions WHERE is_credit = 1'''
+        )
+        return summary
+    def get_credit_transactions(self, limit=50):
+        """Get credit transactions (Wholesale customers on credit)"""
+        query = '''
+            SELECT bill_number, customer_name, total_amount, payment_method, created_at
+            FROM transactions
+            WHERE is_credit = 1
+            ORDER BY created_at DESC
+            LIMIT ?
+        '''
+        return self.db.fetch_all(query, (limit,))
+    
+    def get_replacement_transactions(self, limit=50):
+        """Get replacement transactions"""
+        query = '''
+            SELECT bill_number, customer_name, total_amount, created_at
+            FROM transactions
+            WHERE is_replacement = 1
+            ORDER BY created_at DESC
+            LIMIT ?
+        '''
+        return self.db.fetch_all(query, (limit,))
 
     def close(self):
         """Close database connection"""

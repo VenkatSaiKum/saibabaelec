@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}Wholesale Credit Bills{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="mb-4"><i class="bi bi-people"></i> Wholesale Credit Bills</h1>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <h6 class="card-title">Total Balance</h6>
+                <h3 id="totalBalance">₹0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <h6 class="card-title">Unpaid Bills</h6>
+                <h3 id="unpaidCount">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h6 class="card-title">Partial Paid</h6>
+                <h3 id="partialCount">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h6 class="card-title">Paid Bills</h6>
+                <h3 id="paidCount">0</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Credit Bills</h5>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" id="statusFilter" onchange="loadCreditBills()">
+                <option value="">All Status</option>
+                <option value="UNPAID">Unpaid</option>
+                <option value="PARTIAL">Partial</option>
+                <option value="PAID">Paid</option>
+            </select>
+            <button class="btn btn-sm btn-outline-light" onclick="loadCreditBills()">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Bill #</th>
+                        <th>Customer</th>
+                        <th>Date</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Received</th>
+                        <th class="text-end">Balance</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="creditBody">
+                    <tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal fade" id="creditPaymentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Record Payment</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="payBillNumber">
+                <div class="mb-2"><strong id="payCustomer"></strong></div>
+                <div class="mb-2">Bill #: <span id="payBillNo"></span></div>
+                <div class="mb-2">Total: <span id="payTotal"></span></div>
+                <div class="mb-2">Received: <span id="payReceived"></span></div>
+                <div class="mb-2">Balance: <span id="payBalance" class="text-danger"></span></div>
+                <div class="mb-3">
+                    <label class="form-label">Payment Amount (₹)</label>
+                    <input type="number" class="form-control" id="payAmount" step="0.01" placeholder="Leave blank to mark fully paid">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Payment Date</label>
+                    <input type="date" class="form-control" id="payDate">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" id="payNotes" rows="2" placeholder="Optional"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="submitCreditPayment()">
+                    <i class="bi bi-check-circle"></i> Submit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Details Modal -->
+<div class="modal fade" id="creditDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">Credit Bill Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="creditDetailsBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let creditBills = [];
+
+function formatCurrency(val){
+    return '₹' + (Number(val)||0).toFixed(2);
+}
+
+function loadSummary(){
+    fetch('/api/credit-bills/summary')
+        .then(r=>r.json())
+        .then(s => {
+            document.getElementById('totalBalance').textContent = formatCurrency(s.total_balance || 0);
+            document.getElementById('unpaidCount').textContent = s.unpaid_count || 0;
+            document.getElementById('partialCount').textContent = s.partial_count || 0;
+            document.getElementById('paidCount').textContent = s.paid_count || 0;
+        });
+}
+
+function loadCreditBills(){
+    const status = document.getElementById('statusFilter').value;
+    const url = status ? `/api/credit-bills?status=${status}` : '/api/credit-bills';
+    fetch(url)
+        .then(r=>r.json())
+        .then(data => {
+            creditBills = data || [];
+            renderCreditBills();
+            loadSummary();
+        });
+}
+
+function renderCreditBills(){
+    const tbody = document.getElementById('creditBody');
+    if(!creditBills.length){
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No credit bills</td></tr>';
+        return;
+    }
+    tbody.innerHTML = creditBills.map(b => {
+        const badgeClass = b.credit_status === 'PAID' ? 'bg-success' : (b.credit_status === 'PARTIAL' ? 'bg-info' : 'bg-danger');
+        return `
+            <tr>
+                <td>${b.bill_number}</td>
+                <td>${b.customer_name}</td>
+                <td>${b.created_at || ''}</td>
+                <td class="text-end">${formatCurrency(b.total_amount)}</td>
+                <td class="text-end">${formatCurrency(b.received_amount)}</td>
+                <td class="text-end">${formatCurrency(b.balance)}</td>
+                <td><span class="badge ${badgeClass}">${b.credit_status}</span></td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="viewCreditDetail('${b.bill_number}')"><i class="bi bi-eye"></i></button>
+                    <button class="btn btn-sm btn-success" onclick="openPaymentModal('${b.bill_number}')"><i class="bi bi-cash-coin"></i></button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function openPaymentModal(billNo){
+    const bill = creditBills.find(b => b.bill_number === billNo);
+    if(!bill) return;
+    document.getElementById('payBillNumber').value = bill.bill_number;
+    document.getElementById('payCustomer').textContent = bill.customer_name;
+    document.getElementById('payBillNo').textContent = bill.bill_number;
+    document.getElementById('payTotal').textContent = formatCurrency(bill.total_amount);
+    document.getElementById('payReceived').textContent = formatCurrency(bill.received_amount);
+    document.getElementById('payBalance').textContent = formatCurrency(bill.balance);
+    document.getElementById('payAmount').value = '';
+    document.getElementById('payNotes').value = '';
+    document.getElementById('payDate').value = new Date().toISOString().slice(0,10);
+    const modal = new bootstrap.Modal(document.getElementById('creditPaymentModal'));
+    modal.show();
+}
+
+function submitCreditPayment(){
+    const billNo = document.getElementById('payBillNumber').value;
+    const amountVal = document.getElementById('payAmount').value;
+    const payload = {
+        payment_amount: amountVal === '' ? null : parseFloat(amountVal),
+        payment_date: document.getElementById('payDate').value,
+        notes: document.getElementById('payNotes').value
+    };
+    fetch(`/api/credit-bills/${billNo}/pay`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    }).then(r=>r.json())
+      .then(res => {
+        if(res.success){
+            bootstrap.Modal.getInstance(document.getElementById('creditPaymentModal')).hide();
+            loadCreditBills();
+        }else{
+            alert(res.error || 'Payment failed');
+        }
+      });
+}
+
+function viewCreditDetail(billNo){
+    fetch(`/api/credit-bills/${billNo}`)
+        .then(r=>r.json())
+        .then(bill => {
+            if(bill.error){
+                alert(bill.error);
+                return;
+            }
+            const paymentsRows = (bill.payments || []).map(p => `
+                <tr>
+                    <td>${p.payment_date}</td>
+                    <td class="text-end">${formatCurrency(p.payment_amount)}</td>
+                    <td>${p.notes || ''}</td>
+                </tr>
+            `).join('') || '<tr><td colspan="3" class="text-center text-muted">No payments yet</td></tr>';
+            const body = `
+                <div class="mb-2"><strong>Bill #:</strong> ${bill.bill_number}</div>
+                <div class="mb-2"><strong>Customer:</strong> ${bill.customer_name}</div>
+                <div class="mb-2"><strong>Date:</strong> ${bill.created_at || ''}</div>
+                <div class="mb-2"><strong>Total:</strong> ${formatCurrency(bill.total_amount)}</div>
+                <div class="mb-2"><strong>Received:</strong> ${formatCurrency(bill.received_amount)}</div>
+                <div class="mb-2"><strong>Balance:</strong> ${formatCurrency(bill.balance)}</div>
+                <hr>
+                <h6>Payments</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead class="table-light"><tr><th>Date</th><th class="text-end">Amount</th><th>Notes</th></tr></thead>
+                        <tbody>${paymentsRows}</tbody>
+                    </table>
+                </div>
+            `;
+            document.getElementById('creditDetailsBody').innerHTML = body;
+            new bootstrap.Modal(document.getElementById('creditDetailsModal')).show();
+        });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadCreditBills();
+});
+</script>
+{% endblock %}
