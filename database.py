@@ -38,14 +38,12 @@ class Database:
             try:
                 self.connection = psycopg2.connect(DATABASE_URL)
                 self.cursor = self.connection.cursor()
-                print("✓ PostgreSQL connection successful")
             except Exception as e:
                 print(f"PostgreSQL connection error: {e}")
                 raise
         else:
             self.connection = sqlite3.connect(DB_PATH, check_same_thread=False)
             self.cursor = self.connection.cursor()
-            print("✓ SQLite connection successful")
         
         try:
             # Products table
