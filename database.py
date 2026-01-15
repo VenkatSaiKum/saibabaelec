@@ -1,16 +1,16 @@
 import os
 from datetime import datetime, timedelta
+import sqlite3
 
 # Check if running on Render with PostgreSQL
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-if DATABASE_URL:
-    # Use PostgreSQL
-    import psycopg2
-    from psycopg2 import sql
-else:
-    # Fall back to SQLite for local development
-    import sqlite3
+# Lazy import psycopg2 only when needed
+psycopg2 = None
+sql = None
+
+if not DATABASE_URL:
+    # Use SQLite for local development
     DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'electrical_shop.db')
 
 def get_ist_datetime():
@@ -30,6 +30,11 @@ class Database:
     def init_database(self):
         """Initialize database and create tables"""
         if self.is_postgres:
+            # Lazy import psycopg2 only when needed
+            global psycopg2, sql
+            import psycopg2
+            from psycopg2 import sql
+            
             try:
                 self.connection = psycopg2.connect(DATABASE_URL)
                 self.cursor = self.connection.cursor()
