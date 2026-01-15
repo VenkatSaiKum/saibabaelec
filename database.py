@@ -38,242 +38,285 @@ class Database:
             try:
                 self.connection = psycopg2.connect(DATABASE_URL)
                 self.cursor = self.connection.cursor()
+                print("✓ PostgreSQL connection successful")
             except Exception as e:
                 print(f"PostgreSQL connection error: {e}")
                 raise
         else:
             self.connection = sqlite3.connect(DB_PATH, check_same_thread=False)
             self.cursor = self.connection.cursor()
+            print("✓ SQLite connection successful")
         
-        # Products table
-        if self.is_postgres:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS products (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT NOT NULL UNIQUE,
-                    category TEXT NOT NULL,
-                    unit_price REAL NOT NULL,
-                    quantity INTEGER NOT NULL DEFAULT 0,
-                    minimum_stock INTEGER DEFAULT 5,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-        else:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS products (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL UNIQUE,
-                    category TEXT NOT NULL,
-                    unit_price REAL NOT NULL,
-                    quantity INTEGER NOT NULL DEFAULT 0,
-                    minimum_stock INTEGER DEFAULT 5,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
+        try:
+            # Products table
+            if self.is_postgres:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS products (
+                        id SERIAL PRIMARY KEY,
+                        name TEXT NOT NULL UNIQUE,
+                        category TEXT NOT NULL,
+                        unit_price REAL NOT NULL,
+                        quantity INTEGER NOT NULL DEFAULT 0,
+                        minimum_stock INTEGER DEFAULT 5,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            else:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS products (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        category TEXT NOT NULL,
+                        unit_price REAL NOT NULL,
+                        quantity INTEGER NOT NULL DEFAULT 0,
+                        minimum_stock INTEGER DEFAULT 5,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            self.connection.commit()
+            print("✓ Products table created")
+        except Exception as e:
+            print(f"Error creating products table: {e}")
+            self.connection.rollback()
 
         # Stock movements table
-        if self.is_postgres:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS stock_movements (
-                    id SERIAL PRIMARY KEY,
-                    product_id INTEGER NOT NULL,
-                    movement_type TEXT NOT NULL,
-                    quantity INTEGER NOT NULL,
-                    reference_id INTEGER,
-                    notes TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (product_id) REFERENCES products(id)
-                )
-            ''')
-        else:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS stock_movements (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    product_id INTEGER NOT NULL,
-                    movement_type TEXT NOT NULL,
-                    quantity INTEGER NOT NULL,
-                    reference_id INTEGER,
-                    notes TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (product_id) REFERENCES products(id)
-                )
-            ''')
+        try:
+            if self.is_postgres:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS stock_movements (
+                        id SERIAL PRIMARY KEY,
+                        product_id INTEGER NOT NULL,
+                        movement_type TEXT NOT NULL,
+                        quantity INTEGER NOT NULL,
+                        reference_id INTEGER,
+                        notes TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (product_id) REFERENCES products(id)
+                    )
+                ''')
+            else:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS stock_movements (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        product_id INTEGER NOT NULL,
+                        movement_type TEXT NOT NULL,
+                        quantity INTEGER NOT NULL,
+                        reference_id INTEGER,
+                        notes TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (product_id) REFERENCES products(id)
+                    )
+                ''')
+            self.connection.commit()
+            print("✓ Stock movements table created")
+        except Exception as e:
+            print(f"Stock movements table: {e}")
 
         # Transactions/Bills table
-        if self.is_postgres:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS transactions (
-                    id SERIAL PRIMARY KEY,
-                    customer_name TEXT NOT NULL,
-                    total_amount REAL NOT NULL,
-                    payment_method TEXT DEFAULT 'CASH',
-                    cash_amount REAL,
-                    upi_amount REAL,
-                    bill_number TEXT UNIQUE NOT NULL,
-                    bill_type TEXT DEFAULT 'REGULAR',
-                    is_credit INTEGER DEFAULT 0,
-                    is_replacement INTEGER DEFAULT 0,
-                    received_amount REAL DEFAULT 0,
-                    credit_status TEXT DEFAULT 'UNPAID',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-        else:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS transactions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    customer_name TEXT NOT NULL,
-                    total_amount REAL NOT NULL,
-                    payment_method TEXT DEFAULT 'CASH',
-                    cash_amount REAL,
-                    upi_amount REAL,
-                    bill_number TEXT UNIQUE NOT NULL,
-                    bill_type TEXT DEFAULT 'REGULAR',
-                    is_credit INTEGER DEFAULT 0,
-                    is_replacement INTEGER DEFAULT 0,
-                    received_amount REAL DEFAULT 0,
-                    credit_status TEXT DEFAULT 'UNPAID',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
+        try:
+            if self.is_postgres:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS transactions (
+                        id SERIAL PRIMARY KEY,
+                        customer_name TEXT NOT NULL,
+                        total_amount REAL NOT NULL,
+                        payment_method TEXT DEFAULT 'CASH',
+                        cash_amount REAL,
+                        upi_amount REAL,
+                        bill_number TEXT UNIQUE NOT NULL,
+                        bill_type TEXT DEFAULT 'REGULAR',
+                        is_credit INTEGER DEFAULT 0,
+                        is_replacement INTEGER DEFAULT 0,
+                        received_amount REAL DEFAULT 0,
+                        credit_status TEXT DEFAULT 'UNPAID',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            else:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS transactions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        customer_name TEXT NOT NULL,
+                        total_amount REAL NOT NULL,
+                        payment_method TEXT DEFAULT 'CASH',
+                        cash_amount REAL,
+                        upi_amount REAL,
+                        bill_number TEXT UNIQUE NOT NULL,
+                        bill_type TEXT DEFAULT 'REGULAR',
+                        is_credit INTEGER DEFAULT 0,
+                        is_replacement INTEGER DEFAULT 0,
+                        received_amount REAL DEFAULT 0,
+                        credit_status TEXT DEFAULT 'UNPAID',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            self.connection.commit()
+            print("✓ Transactions table created")
+        except Exception as e:
+            print(f"Transactions table: {e}")
 
         # Transaction items table
-        if self.is_postgres:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS transaction_items (
-                    id SERIAL PRIMARY KEY,
-                    transaction_id INTEGER NOT NULL,
-                    product_id INTEGER NOT NULL,
-                    product_name TEXT,
-                    quantity INTEGER NOT NULL,
-                    unit_price REAL NOT NULL,
-                    total_price REAL NOT NULL,
-                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
-                )
-            ''')
-        else:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS transaction_items (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    transaction_id INTEGER NOT NULL,
-                    product_id INTEGER NOT NULL,
-                    product_name TEXT,
-                    quantity INTEGER NOT NULL,
-                    unit_price REAL NOT NULL,
-                    total_price REAL NOT NULL,
-                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
-                )
-            ''')
+        try:
+            if self.is_postgres:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS transaction_items (
+                        id SERIAL PRIMARY KEY,
+                        transaction_id INTEGER NOT NULL,
+                        product_id INTEGER NOT NULL,
+                        product_name TEXT,
+                        quantity INTEGER NOT NULL,
+                        unit_price REAL NOT NULL,
+                        total_price REAL NOT NULL,
+                        FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                    )
+                ''')
+            else:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS transaction_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        transaction_id INTEGER NOT NULL,
+                        product_id INTEGER NOT NULL,
+                        product_name TEXT,
+                        quantity INTEGER NOT NULL,
+                        unit_price REAL NOT NULL,
+                        total_price REAL NOT NULL,
+                        FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                    )
+                ''')
+            self.connection.commit()
+            print("✓ Transaction items table created")
+        except Exception as e:
+            print(f"Transaction items table: {e}")
 
         # Expenses table
-        if self.is_postgres:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS expenses (
-                    id SERIAL PRIMARY KEY,
-                    category TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    expense_date DATE NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-        else:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS expenses (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    category TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    expense_date DATE NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
+        try:
+            if self.is_postgres:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS expenses (
+                        id SERIAL PRIMARY KEY,
+                        category TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        expense_date DATE NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            else:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS expenses (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        category TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        amount REAL NOT NULL,
+                        expense_date DATE NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+            self.connection.commit()
+            print("✓ Expenses table created")
+        except Exception as e:
+            print(f"Expenses table: {e}")
 
         # Supplier Bills table
-        if self.is_postgres:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS supplier_bills (
-                    id SERIAL PRIMARY KEY,
-                    supplier_name TEXT NOT NULL,
-                    bill_number TEXT NOT NULL,
-                    bill_date TEXT NOT NULL,
-                    total_amount REAL NOT NULL,
-                    paid_amount REAL DEFAULT 0,
-                    status TEXT DEFAULT 'UNPAID',
-                    description TEXT,
-                    due_date TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    paid_at TIMESTAMP
-                )
-            ''')
-        else:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS supplier_bills (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    supplier_name TEXT NOT NULL,
-                    bill_number TEXT NOT NULL,
-                    bill_date TEXT NOT NULL,
-                    total_amount REAL NOT NULL,
-                    paid_amount REAL DEFAULT 0,
-                    status TEXT DEFAULT 'UNPAID',
-                    description TEXT,
-                    due_date TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    paid_at DATETIME
-                )
-            ''')
+        try:
+            if self.is_postgres:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS supplier_bills (
+                        id SERIAL PRIMARY KEY,
+                        supplier_name TEXT NOT NULL,
+                        bill_number TEXT NOT NULL,
+                        bill_date TEXT NOT NULL,
+                        total_amount REAL NOT NULL,
+                        paid_amount REAL DEFAULT 0,
+                        status TEXT DEFAULT 'UNPAID',
+                        description TEXT,
+                        due_date TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        paid_at TIMESTAMP
+                    )
+                ''')
+            else:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS supplier_bills (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        supplier_name TEXT NOT NULL,
+                        bill_number TEXT NOT NULL,
+                        bill_date TEXT NOT NULL,
+                        total_amount REAL NOT NULL,
+                        paid_amount REAL DEFAULT 0,
+                        status TEXT DEFAULT 'UNPAID',
+                        description TEXT,
+                        due_date TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        paid_at DATETIME
+                    )
+                ''')
+            self.connection.commit()
+            print("✓ Supplier bills table created")
+        except Exception as e:
+            print(f"Supplier bills table: {e}")
 
         # Supplier Bill Payments table
-        if self.is_postgres:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS supplier_bill_payments (
-                    id SERIAL PRIMARY KEY,
-                    bill_id INTEGER NOT NULL,
-                    payment_amount REAL NOT NULL,
-                    payment_date TEXT NOT NULL,
-                    notes TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (bill_id) REFERENCES supplier_bills(id)
-                )
-            ''')
-        else:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS supplier_bill_payments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    bill_id INTEGER NOT NULL,
-                    payment_amount REAL NOT NULL,
-                    payment_date TEXT NOT NULL,
-                    notes TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (bill_id) REFERENCES supplier_bills(id)
-                )
-            ''')
+        try:
+            if self.is_postgres:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS supplier_bill_payments (
+                        id SERIAL PRIMARY KEY,
+                        bill_id INTEGER NOT NULL,
+                        payment_amount REAL NOT NULL,
+                        payment_date TEXT NOT NULL,
+                        notes TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (bill_id) REFERENCES supplier_bills(id)
+                    )
+                ''')
+            else:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS supplier_bill_payments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        bill_id INTEGER NOT NULL,
+                        payment_amount REAL NOT NULL,
+                        payment_date TEXT NOT NULL,
+                        notes TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (bill_id) REFERENCES supplier_bills(id)
+                    )
+                ''')
+            self.connection.commit()
+            print("✓ Supplier bill payments table created")
+        except Exception as e:
+            print(f"Supplier bill payments table: {e}")
 
         # Credit Bill Payments table (for wholesale credit customers)
-        if self.is_postgres:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS credit_bill_payments (
-                    id SERIAL PRIMARY KEY,
-                    transaction_id INTEGER NOT NULL,
-                    payment_amount REAL NOT NULL,
-                    payment_date TEXT NOT NULL,
-                    notes TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
-                )
-            ''')
-        else:
-            self.cursor.execute('''
-                CREATE TABLE IF NOT EXISTS credit_bill_payments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    transaction_id INTEGER NOT NULL,
-                    payment_amount REAL NOT NULL,
-                    payment_date TEXT NOT NULL,
-                    notes TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (transaction_id) REFERENCES transactions(id)
-                )
-            ''')
+        try:
+            if self.is_postgres:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS credit_bill_payments (
+                        id SERIAL PRIMARY KEY,
+                        transaction_id INTEGER NOT NULL,
+                        payment_amount REAL NOT NULL,
+                        payment_date TEXT NOT NULL,
+                        notes TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                    )
+                ''')
+            else:
+                self.cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS credit_bill_payments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        transaction_id INTEGER NOT NULL,
+                        payment_amount REAL NOT NULL,
+                        payment_date TEXT NOT NULL,
+                        notes TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (transaction_id) REFERENCES transactions(id)
+                    )
+                ''')
+            self.connection.commit()
+            print("✓ Credit bill payments table created")
+        except Exception as e:
+            print(f"Credit bill payments table: {e}")
 
         # Add columns to existing transactions table if they don't exist
         try:
