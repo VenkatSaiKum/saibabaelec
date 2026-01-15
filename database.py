@@ -311,6 +311,10 @@ class Database:
     def execute_query(self, query, params=None):
         """Execute a query"""
         try:
+            # Convert SQLite placeholders to PostgreSQL placeholders if needed
+            if self.is_postgres and params:
+                query = query.replace('?', '%s')
+            
             if params:
                 self.cursor.execute(query, params)
             else:
@@ -324,6 +328,10 @@ class Database:
     def fetch_all(self, query, params=None):
         """Fetch all results"""
         try:
+            # Convert SQLite placeholders to PostgreSQL placeholders if needed
+            if self.is_postgres and params:
+                query = query.replace('?', '%s')
+                
             if params:
                 self.cursor.execute(query, params)
             else:
@@ -336,6 +344,10 @@ class Database:
     def fetch_one(self, query, params=None):
         """Fetch single result"""
         try:
+            # Convert SQLite placeholders to PostgreSQL placeholders if needed
+            if self.is_postgres and params:
+                query = query.replace('?', '%s')
+                
             if params:
                 self.cursor.execute(query, params)
             else:
