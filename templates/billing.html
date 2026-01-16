@@ -107,10 +107,9 @@
                                 <!-- Select Mode -->
                                 <div id="selectMode" class="row mb-3">
                                     <div class="col-md-4">
-                                        <label class="form-label">Product *</label>
-                                        <select class="form-select" id="itemProduct" onchange="updatePriceField()">
-                                            <option value="">Select Product...</option>
-                                        </select>
+                                        <label class="form-label">Product * (Type to search)</label>
+                                        <input type="text" class="form-control" id="itemProduct" placeholder="Type product name..." autocomplete="off">
+                                        <div class="list-group mt-1" id="productSuggestions" style="display: none; position: absolute; width: 300px; z-index: 1000;"></div>
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label">Quantity *</label>
@@ -340,14 +339,12 @@
     }
 
     function addBillItem() {
-        const select = document.getElementById('itemProduct');
+        const productName = document.getElementById('itemProduct').value.trim();
         const qty = parseInt(document.getElementById('itemQuantity').value);
         const price = parseFloat(document.getElementById('itemPrice').value);
-        const productId = select.value;
-        const productName = select.options[select.selectedIndex].dataset.name;
 
-        if (!productId || !qty || !price) {
-            alert('Please select product, enter quantity and selling price');
+        if (!productName || !qty || !price) {
+            alert('Please enter product name, quantity and selling price');
             return;
         }
 
@@ -360,6 +357,10 @@
             alert('Selling price must be positive');
             return;
         }
+
+        // Find product in allProducts to get ID
+        const product = allProducts.find(p => p.name.toLowerCase() === productName.toLowerCase());
+        const productId = product ? product.id : null;
 
         billItems.push({product_id: productId, name: productName, quantity: qty, unit_price: price});
         updateBillDisplay();
@@ -706,5 +707,67 @@
     
     // Set today's date (IST) as default
     document.getElementById('billDate').value = getISTDate();
+    
+    // ============ AUTOCOMPLETE FOR PRODUCT SEARCH ============
+    let allProducts = [];
+    
+    // Fetch all products on page load
+    async function loadProductsList() {
+        try {
+            const response = await fetch('/api/products');
+            const data = await response.json();
+            allProducts = data;
+        } catch (error) {
+            console.error('Error loading products:', error);
+        }
+    }
+    
+    // Handle product input with autocomplete
+    document.getElementById('itemProduct').addEventListener('input', function(e) {
+        const query = this.value.toLowerCase();
+        const suggestionsDiv = document.getElementById('productSuggestions');
+        
+        if (query.length === 0) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+        
+        // Filter products matching the query
+        const matches = allProducts.filter(product => 
+            product.name.toLowerCase().includes(query)
+        ).slice(0, 10); // Show top 10 matches
+        
+        if (matches.length === 0) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+        
+        // Display suggestions
+        suggestionsDiv.innerHTML = matches.map(product => `
+            <button type="button" class="list-group-item list-group-item-action" onclick="selectProduct('${product.id}', '${product.name}', '${product.unit_price}')">
+                <div><strong>${product.name}</strong></div>
+                <small class="text-muted">Unit Price: ₹${product.unit_price.toFixed(2)} | Stock: ${product.quantity}</small>
+            </button>
+        `).join('');
+        suggestionsDiv.style.display = 'block';
+    });
+    
+    // Handle product selection from suggestions
+    window.selectProduct = function(productId, productName, unitPrice) {
+        document.getElementById('itemProduct').value = productName;
+        document.getElementById('productSuggestions').style.display = 'none';
+        document.getElementById('itemPrice').value = unitPrice;
+        document.getElementById('itemQuantity').focus();
+    };
+    
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#itemProduct') && !e.target.closest('#productSuggestions')) {
+            document.getElementById('productSuggestions').style.display = 'none';
+        }
+    });
+    
+    // Load products on page load
+    loadProductsList();
 </script>
 {% endblock %}
