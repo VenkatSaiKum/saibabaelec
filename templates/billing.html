@@ -1,0 +1,773 @@
+{% extends "base.html" %}
+
+{% block title %}Billing - Electrical Shop Management{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="mb-4"><i class="bi bi-receipt"></i> Billing & Invoicing</h1>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-4" role="tablist">
+    <li class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#createBill">Create Bill</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#billHistory">Bill History</a>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- Create Bill Tab -->
+    <div id="createBill" class="tab-pane fade show active">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Create New Invoice</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Customer Name *</label>
+                                <input type="text" class="form-control" id="customerName" placeholder="Enter customer name" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Date *</label>
+                                <input type="date" class="form-control" id="billDate" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Payment Method *</label>
+                                <select class="form-select" id="paymentMethod" required onchange="toggleMixedPayment()">
+                                    <option value="CASH">Cash</option>
+                                    <option value="UPI">UPI</option>
+                                    <option value="MIXED">Mixed (Cash + UPI)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Bill Type *</label>
+                                <select class="form-select" id="billType" required>
+                                    <option value="REGULAR">Regular Sale</option>
+                                    <option value="CREDIT">Credit (Wholesale)</option>
+                                    <option value="REPLACEMENT">Replacement</option>
+                                </select>
+                                <small class="text-muted">Credit & Replacement don't count in today's sales</small>
+                            </div>
+                        </div>
+                        <div id="mixedPaymentFields" class="mt-3" style="display: none;">
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0">Mixed Payment Details</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Cash Amount (₹) *</label>
+                                            <input type="number" class="form-control" id="cashAmount" step="0.01" min="0" placeholder="Enter cash amount" onkeyup="updateMixedPayment()" onchange="updateMixedPayment()">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">UPI Amount (₹) *</label>
+                                            <input type="number" class="form-control" id="upiAmount" step="0.01" min="0" placeholder="Enter UPI amount" onkeyup="updateMixedPayment()" onchange="updateMixedPayment()">
+                                        </div>
+                                    </div>
+                                    <div class="alert alert-info mb-0" id="mixedPaymentInfo">
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <small><strong>Total Bill:</strong> <span id="mixedTotalBill" class="text-primary">₹0.00</span></small>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <small><strong>Cash + UPI:</strong> <span id="mixedTotalPayment" class="text-success">₹0.00</span></small>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <small><strong>Remaining:</strong> <span id="mixedRemaining" class="text-danger">₹0.00</span></small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">Add Items to Bill</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="productMode" id="modeSelect" value="select" checked onchange="toggleProductMode()">
+                                        <label class="form-check-label" for="modeSelect">Select Existing Product</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="productMode" id="modeManual" value="manual" onchange="toggleProductMode()">
+                                        <label class="form-check-label" for="modeManual">Enter Product Manually</label>
+                                    </div>
+                                </div>
+
+                                <!-- Select Mode -->
+                                <div id="selectMode" class="row mb-3">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Product * (Type to search)</label>
+                                        <input type="text" class="form-control" id="itemProduct" placeholder="Type product name..." autocomplete="off">
+                                        <div class="list-group mt-1" id="productSuggestions" style="display: none; position: absolute; width: 300px; z-index: 1000;"></div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Quantity *</label>
+                                        <input type="number" class="form-control" id="itemQuantity" min="1" value="1">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Selling Price (₹) *</label>
+                                        <input type="number" class="form-control" id="itemPrice" step="0.01" placeholder="Enter price">
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end">
+                                        <button type="button" class="btn btn-success w-100" onclick="addBillItem()">
+                                            <i class="bi bi-plus"></i> Add
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Manual Mode -->
+                                <div id="manualMode" class="row mb-3" style="display: none;">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Product Name *</label>
+                                        <input type="text" class="form-control" id="manualProductName" placeholder="Enter product name">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Quantity *</label>
+                                        <input type="number" class="form-control" id="manualQuantity" min="1" value="1">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Selling Price (₹) *</label>
+                                        <input type="number" class="form-control" id="manualPrice" step="0.01" placeholder="Enter price">
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end">
+                                        <button type="button" class="btn btn-success w-100" onclick="addManualItem()">
+                                            <i class="bi bi-plus"></i> Add
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive">
+                                    <table class="table table-sm" id="billItemsTable">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Product</th>
+                                                <th>Qty</th>
+                                                <th>Selling Price</th>
+                                                <th>Total</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="billItems"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <button type="button" class="btn btn-danger" onclick="clearBill()">
+                                    <i class="bi bi-trash"></i> Clear
+                                </button>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <button type="button" class="btn btn-success btn-lg" onclick="submitBill()">
+                                    <i class="bi bi-check-circle"></i> Create Bill
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card sticky-top" style="top: 80px;">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">Bill Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <strong>Total Items:</strong>
+                            <span class="float-end" id="totalItems">0</span>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Subtotal:</strong>
+                            <span class="float-end" id="subtotal">₹0.00</span>
+                        </div>
+                        <hr>
+                        <div class="mb-3">
+                            <strong style="font-size: 1.2em;">Total Amount:</strong>
+                            <span class="float-end" style="font-size: 1.2em; color: #28a745;" id="totalAmount">₹0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bill History Tab -->
+    <div id="billHistory" class="tab-pane fade">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Recent Bills</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm" id="billsTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Bill #</th>
+                                <th>Customer</th>
+                                <th>Date/Time</th>
+                                <th class="text-end">Amount</th>
+                                <th>Payment</th>
+                                <th></th>
+                            </tr>
+                            <tr class="table-secondary">
+                                <th colspan="2"></th>
+                                <th>Product</th>
+                                <th class="text-center">Qty</th>
+                                <th class="text-end">Unit Price</th>
+                                <th class="text-end">Total</th>
+                                <th colspan="3"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="billsBody">
+                            <tr><td colspan="9" class="text-center text-muted">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bill Detail Modal -->
+<div class="modal fade" id="billDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title" id="billDetailTitle">Bill Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="billDetailBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="printBill()">
+                    <i class="bi bi-printer"></i> Print
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let billItems = [];
+
+    function toggleProductMode() {
+        const mode = document.querySelector('input[name="productMode"]:checked').value;
+        if (mode === 'select') {
+            document.getElementById('selectMode').style.display = 'flex';
+            document.getElementById('manualMode').style.display = 'none';
+        } else {
+            document.getElementById('selectMode').style.display = 'none';
+            document.getElementById('manualMode').style.display = 'flex';
+        }
+    }
+
+    function toggleMixedPayment() {
+        const paymentMethod = document.getElementById('paymentMethod').value;
+        const mixedFields = document.getElementById('mixedPaymentFields');
+        
+        if (paymentMethod === 'MIXED') {
+            mixedFields.style.display = 'block';
+            document.getElementById('cashAmount').required = true;
+            document.getElementById('upiAmount').required = true;
+        } else {
+            mixedFields.style.display = 'none';
+            document.getElementById('cashAmount').required = false;
+            document.getElementById('upiAmount').required = false;
+            document.getElementById('cashAmount').value = '';
+            document.getElementById('upiAmount').value = '';
+        }
+    }
+
+    function updateMixedPayment() {
+        const cashAmount = parseFloat(document.getElementById('cashAmount').value) || 0;
+        const upiAmount = parseFloat(document.getElementById('upiAmount').value) || 0;
+        const totalPayment = cashAmount + upiAmount;
+        const totalBill = billItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+        const remaining = totalBill - totalPayment;
+        
+        // Display all three values
+        document.getElementById('mixedTotalBill').textContent = '₹' + totalBill.toFixed(2);
+        document.getElementById('mixedTotalPayment').textContent = '₹' + totalPayment.toFixed(2);
+        
+        // Color code the remaining amount
+        const remainingElement = document.getElementById('mixedRemaining');
+        remainingElement.textContent = '₹' + Math.abs(remaining).toFixed(2);
+        
+        if (remaining < -0.01) {
+            remainingElement.className = 'text-warning'; // overpaid
+        } else if (Math.abs(remaining) < 0.01) {
+            remainingElement.className = 'text-success'; // exact match
+        } else {
+            remainingElement.className = 'text-danger'; // unpaid
+        }
+    }
+
+    function loadProducts() {
+        fetch('/api/products')
+            .then(r => r.json())
+            .then(products => {
+                document.getElementById('itemProduct').innerHTML = '<option value="">Select Product...</option>' +
+                    products.map(p => `<option value="${p.id}" data-price="${p.unit_price}" data-name="${p.name}">${p.name} - ₹${p.unit_price.toFixed(2)} (${p.quantity} in stock)</option>`).join('');
+            });
+    }
+
+    function updatePriceField() {
+        const select = document.getElementById('itemProduct');
+        const priceInput = document.getElementById('itemPrice');
+        if (select.value) {
+            const unitPrice = parseFloat(select.options[select.selectedIndex].dataset.price);
+            priceInput.value = unitPrice.toFixed(2);
+        } else {
+            priceInput.value = '';
+        }
+    }
+
+    function addBillItem() {
+        const productName = document.getElementById('itemProduct').value.trim();
+        const qty = parseInt(document.getElementById('itemQuantity').value);
+        const price = parseFloat(document.getElementById('itemPrice').value);
+
+        if (!productName || !qty || !price) {
+            alert('Please enter product name, quantity and selling price');
+            return;
+        }
+
+        if (qty <= 0) {
+            alert('Quantity must be positive');
+            return;
+        }
+
+        if (price <= 0) {
+            alert('Selling price must be positive');
+            return;
+        }
+
+        // Find product in allProducts to get ID
+        const product = allProducts.find(p => p.name.toLowerCase() === productName.toLowerCase());
+        const productId = product ? product.id : null;
+
+        billItems.push({product_id: productId, name: productName, quantity: qty, unit_price: price});
+        updateBillDisplay();
+        document.getElementById('itemQuantity').value = '1';
+        document.getElementById('itemPrice').value = '';
+        document.getElementById('itemProduct').value = '';
+    }
+
+    function addManualItem() {
+        const productName = document.getElementById('manualProductName').value.trim();
+        const qty = parseInt(document.getElementById('manualQuantity').value);
+        const price = parseFloat(document.getElementById('manualPrice').value);
+
+        if (!productName || !qty || !price) {
+            alert('Please enter product name, quantity and selling price');
+            return;
+        }
+
+        if (qty <= 0) {
+            alert('Quantity must be positive');
+            return;
+        }
+
+        if (price <= 0) {
+            alert('Selling price must be positive');
+            return;
+        }
+
+        // Use 0 as product_id for manual items (no stock tracking)
+        billItems.push({product_id: 0, name: productName, quantity: qty, unit_price: price, is_manual: true});
+        updateBillDisplay();
+        document.getElementById('manualProductName').value = '';
+        document.getElementById('manualQuantity').value = '1';
+        document.getElementById('manualPrice').value = '';
+    }
+
+    function removeBillItem(index) {
+        billItems.splice(index, 1);
+        updateBillDisplay();
+    }
+
+    function updateBillDisplay() {
+        const tbody = document.getElementById('billItems');
+        let total = 0;
+        
+        tbody.innerHTML = billItems.map((item, i) => {
+            const itemTotal = item.quantity * item.unit_price;
+            total += itemTotal;
+            return `
+                <tr>
+                    <td>${item.name}</td>
+                    <td>${item.quantity}</td>
+                    <td>₹${item.unit_price.toFixed(2)}</td>
+                    <td>₹${itemTotal.toFixed(2)}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="removeBillItem(${i})"><i class="bi bi-x"></i></button></td>
+                </tr>
+            `;
+        }).join('');
+
+        document.getElementById('totalItems').textContent = billItems.length;
+        document.getElementById('subtotal').textContent = '₹' + total.toFixed(2);
+        document.getElementById('totalAmount').textContent = '₹' + total.toFixed(2);
+    }
+
+    function submitBill() {
+        const customerName = document.getElementById('customerName').value;
+        const paymentMethod = document.getElementById('paymentMethod').value;
+
+        if (!customerName) {
+            alert('Please enter customer name');
+            return;
+        }
+
+        if (billItems.length === 0) {
+            alert('Please add at least one item to the bill');
+            return;
+        }
+
+        // Validate mixed payment
+        if (paymentMethod === 'MIXED') {
+            const cashAmount = parseFloat(document.getElementById('cashAmount').value) || 0;
+            const upiAmount = parseFloat(document.getElementById('upiAmount').value) || 0;
+            const totalBill = billItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+            const totalPayment = cashAmount + upiAmount;
+            
+            if (Math.abs(totalPayment - totalBill) > 0.01) {
+                alert(`Payment mismatch! Bill total: ₹${totalBill.toFixed(2)}, Payment total: ₹${totalPayment.toFixed(2)}`);
+                return;
+            }
+        }
+
+        createBill();
+    }
+
+    function createBill() {
+        const customerName = document.getElementById('customerName').value;
+        const paymentMethod = document.getElementById('paymentMethod').value;
+        const billType = document.getElementById('billType').value;
+
+        if (!customerName || billItems.length === 0) {
+            alert('Please enter customer name and add items');
+            return;
+        }
+
+        const billData = {
+            customer_name: customerName,
+            payment_method: paymentMethod,
+            bill_type: billType,
+            items: billItems.map(item => ({
+                product_id: item.product_id,
+                quantity: item.quantity,
+                unit_price: item.unit_price,
+                name: item.name
+            }))
+        };
+
+        // Add mixed payment details if applicable
+        if (paymentMethod === 'MIXED') {
+            billData.cash_amount = parseFloat(document.getElementById('cashAmount').value);
+            billData.upi_amount = parseFloat(document.getElementById('upiAmount').value);
+        }
+
+        fetch('/api/billing/create', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(billData)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                let billTypeMsg = '';
+                if (billType === 'CREDIT') {
+                    billTypeMsg = '\n(Added to Wholesale Customers on Credit - Not counted in today\'s sales)';
+                } else if (billType === 'REPLACEMENT') {
+                    billTypeMsg = '\n(Replacement - Stock reduced but not counted in today\'s sales)';
+                }
+                alert('Bill created successfully!' + billTypeMsg);
+                viewBillDetail(data.bill_number);
+                clearBill();
+                loadBillHistory();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    }
+
+    function clearBill() {
+        billItems = [];
+        document.getElementById('customerName').value = '';
+        document.getElementById('itemQuantity').value = '';
+        updateBillDisplay();
+    }
+
+    function loadBillHistory() {
+        fetch('/api/bills')
+            .then(r => {
+                if (!r.ok) {
+                    console.error('Failed to fetch bills:', r.status);
+                    throw new Error('Failed to fetch bills');
+                }
+                return r.json();
+            })
+            .then(bills => {
+                console.log('Bills loaded:', bills);
+                const tbody = document.getElementById('billsBody');
+                if (!bills || bills.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No bills found</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = bills.map((bill, index) => {
+                    try {
+                        const dateObj = new Date(bill.created_at.replace(' ', 'T'));
+                        const formattedDate = dateObj.toLocaleString('en-IN', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                        });
+                        
+                        const itemsHtml = (bill.items || []).map(item => `
+                            <tr class="table-light">
+                                <td colspan="2"></td>
+                                <td class="text-nowrap">${item.product_name}</td>
+                                <td class="text-center">${item.quantity}</td>
+                                <td class="text-end">₹${item.unit_price.toFixed(2)}</td>
+                                <td class="text-end"><strong>₹${item.total_price.toFixed(2)}</strong></td>
+                                <td colspan="3"></td>
+                            </tr>
+                        `).join('');
+                        
+                        return `
+                        <tr class="fw-bold">
+                            <td>${bill.bill_number}</td>
+                            <td>${bill.customer_name}</td>
+                            <td>${formattedDate}</td>
+                            <td class="text-end">₹${bill.total_amount.toFixed(2)}</td>
+                            <td>${bill.payment_method}</td>
+                            <td><button class="btn btn-sm btn-info" onclick="viewBillDetail('${bill.bill_number}')"><i class="bi bi-eye"></i> View</button></td>
+                        </tr>
+                        ${itemsHtml}
+                        `;
+                    } catch (e) {
+                        console.error('Error formatting bill:', bill, e);
+                        return '';
+                    }
+                }).join('');
+            })
+            .catch(err => {
+                console.error('Error loading bill history:', err);
+                document.getElementById('billsBody').innerHTML = '<tr><td colspan="9" class="text-center text-danger">Error loading bills</td></tr>';
+            });
+    }
+
+    function viewBillDetail(billNumber) {
+        console.log('Loading bill detail for:', billNumber);
+        fetch(`/api/bills/${billNumber}`)
+            .then(r => {
+                if (!r.ok) {
+                    console.error('Failed to fetch bill detail:', r.status);
+                    throw new Error('Failed to fetch bill');
+                }
+                return r.json();
+            })
+            .then(bill => {
+                if (!bill) {
+                    alert('Bill not found');
+                    return;
+                }
+                
+                console.log('Bill object:', bill);
+                console.log('Bill items:', bill.items);
+                console.log('Items count:', bill.items ? bill.items.length : 0);
+                
+                let formattedDate = 'N/A';
+                if (bill.created_at) {
+                    try {
+                        const dateObj = new Date(bill.created_at.replace(' ', 'T'));
+                        formattedDate = dateObj.toLocaleString('en-IN', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit'
+                        });
+                    } catch (e) {
+                        console.error('Error formatting date:', bill.created_at, e);
+                        formattedDate = bill.created_at || 'N/A';
+                    }
+                }
+                
+                // Build items table
+                let itemsHtml = '';
+                let subtotal = 0;
+                
+                if (bill.items && bill.items.length > 0) {
+                    bill.items.forEach(item => {
+                        const itemTotal = item.unit_price * item.quantity;
+                        subtotal += itemTotal;
+                        itemsHtml += `
+                            <tr>
+                                <td>${item.product_name}</td>
+                                <td class="text-center">${item.quantity}</td>
+                                <td class="text-end">₹${parseFloat(item.unit_price).toFixed(2)}</td>
+                                <td class="text-end"><strong>₹${itemTotal.toFixed(2)}</strong></td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    itemsHtml = '<tr><td colspan="4" class="text-center text-muted">No items found</td></tr>';
+                }
+                
+                let html = `
+                    <div class="text-center mb-3">
+                        <h4>📋 ELECTRICAL SHOP INVOICE</h4>
+                        <p class="mb-1">Bill #: <strong>${bill.bill_number || 'N/A'}</strong></p>
+                        <small class="text-muted">${formattedDate}</small>
+                    </div>
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div><strong>Customer:</strong></div>
+                            <div class="ms-3">${bill.customer_name || 'N/A'}</div>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <div><strong>Payment Method:</strong></div>
+                            <div class="ms-3">${bill.payment_method}</div>
+                        </div>
+                    </div>
+                    <hr>
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Product</th>
+                                <th class="text-center" style="width: 80px;">Qty</th>
+                                <th class="text-end" style="width: 100px;">Unit Price</th>
+                                <th class="text-end" style="width: 100px;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${itemsHtml}
+                            <tr class="table-light fw-bold">
+                                <td colspan="3" class="text-end">Subtotal:</td>
+                                <td class="text-end">₹${subtotal.toFixed(2)}</td>
+                            </tr>
+                            <tr class="table-dark text-white">
+                                <td colspan="3" class="text-end"><strong>Total Amount:</strong></td>
+                                <td class="text-end"><strong>₹${bill.total_amount.toFixed(2)}</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                `;
+
+                document.getElementById('billDetailTitle').textContent = `Bill #${bill.bill_number}`;
+                document.getElementById('billDetailBody').innerHTML = html;
+                new bootstrap.Modal(document.getElementById('billDetailModal')).show();
+            })
+            .catch(err => {
+                console.error('Error loading bill detail:', err);
+                alert('Error loading bill details: ' + err.message);
+            });
+    }
+
+    function printBill() {
+        window.print();
+    }
+
+    loadProducts();
+    loadBillHistory();
+    
+    // Get current date in IST timezone (India Standard Time: UTC +5:30)
+    function getISTDate() {
+        const now = new Date();
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const ist = new Date(utc + (5.5 * 60 * 60 * 1000)); // IST is UTC +5:30
+        const year = ist.getFullYear();
+        const month = String(ist.getMonth() + 1).padStart(2, '0');
+        const date = String(ist.getDate()).padStart(2, '0');
+        return `${year}-${month}-${date}`;
+    }
+    
+    // Set today's date (IST) as default
+    document.getElementById('billDate').value = getISTDate();
+    
+    // ============ AUTOCOMPLETE FOR PRODUCT SEARCH ============
+    let allProducts = [];
+    
+    // Fetch all products on page load
+    async function loadProductsList() {
+        try {
+            const response = await fetch('/api/products');
+            const data = await response.json();
+            allProducts = data;
+        } catch (error) {
+            console.error('Error loading products:', error);
+        }
+    }
+    
+    // Handle product input with autocomplete
+    document.getElementById('itemProduct').addEventListener('input', function(e) {
+        const query = this.value.toLowerCase();
+        const suggestionsDiv = document.getElementById('productSuggestions');
+        
+        if (query.length === 0) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+        
+        // Filter products matching the query
+        const matches = allProducts.filter(product => 
+            product.name.toLowerCase().includes(query)
+        ).slice(0, 10); // Show top 10 matches
+        
+        if (matches.length === 0) {
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+        
+        // Display suggestions
+        suggestionsDiv.innerHTML = matches.map(product => `
+            <button type="button" class="list-group-item list-group-item-action" onclick="selectProduct('${product.id}', '${product.name}', '${product.unit_price}')">
+                <div><strong>${product.name}</strong></div>
+                <small class="text-muted">Unit Price: ₹${product.unit_price.toFixed(2)} | Stock: ${product.quantity}</small>
+            </button>
+        `).join('');
+        suggestionsDiv.style.display = 'block';
+    });
+    
+    // Handle product selection from suggestions
+    window.selectProduct = function(productId, productName, unitPrice) {
+        document.getElementById('itemProduct').value = productName;
+        document.getElementById('productSuggestions').style.display = 'none';
+        document.getElementById('itemPrice').value = unitPrice;
+        document.getElementById('itemQuantity').focus();
+    };
+    
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#itemProduct') && !e.target.closest('#productSuggestions')) {
+            document.getElementById('productSuggestions').style.display = 'none';
+        }
+    });
+    
+    // Load products on page load
+    loadProductsList();
+</script>
+{% endblock %}
