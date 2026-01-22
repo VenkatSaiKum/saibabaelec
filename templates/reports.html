@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - Electrical Shop Management{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1 class="mb-4"><i class="bi bi-graph-up"></i> Reports & Analytics</h1>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Sales Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-6 mb-3">
+                        <h6 class="text-muted">Total Bills</h6>
+                        <h3 id="rptTotalBills">0</h3>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <h6 class="text-muted">Total Sales</h6>
+                        <h3 class="text-success" id="rptTotalSales">₹0</h3>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Avg Bill Value</h6>
+                        <h3 class="text-info" id="rptAvgBill">₹0</h3>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Max Bill Value</h6>
+                        <h3 class="text-warning" id="rptMaxBill">₹0</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="bi bi-exclamation-circle"></i> Low Stock Alert</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm" id="lowStockTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Product</th>
+                                <th>Current</th>
+                                <th>Min Required</th>
+                                <th>Shortage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lowStockBody">
+                            <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="bi bi-calendar-range"></i> Daily Sales</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Select Date</label>
+                        <input type="date" class="form-control" id="salesDate" onchange="loadDailySales()">
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover" id="dailySalesTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Bill #</th>
+                                <th>Customer</th>
+                                <th>Amount</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dailySalesBody">
+                            <tr><td colspan="4" class="text-center text-muted">Select a date</td></tr>
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th colspan="2" class="text-end">Daily Total:</th>
+                                <th id="dailyTotal">₹0</th>
+                                <th></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function loadSalesSummary() {
+        fetch('/api/reports/sales-summary')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('rptTotalBills').textContent = data.total_bills;
+                document.getElementById('rptTotalSales').textContent = '₹' + data.total_sales.toLocaleString('en-IN', {maximumFractionDigits: 2});
+                document.getElementById('rptAvgBill').textContent = '₹' + data.avg_bill_value.toLocaleString('en-IN', {maximumFractionDigits: 2});
+                document.getElementById('rptMaxBill').textContent = '₹' + data.max_bill_value.toLocaleString('en-IN', {maximumFractionDigits: 2});
+            });
+    }
+
+    function loadLowStockReport() {
+        fetch('/api/reports/low-stock')
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('lowStockBody');
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-success"><i class="bi bi-check-circle"></i> All products well stocked!</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.map(item => `
+                    <tr class="table-warning">
+                        <td><strong>${item.name}</strong></td>
+                        <td>${item.current_quantity}</td>
+                        <td>${item.minimum_stock}</td>
+                        <td><span class="badge bg-danger">${item.shortage}</span></td>
+                    </tr>
+                `).join('');
+            });
+    }
+
+    function loadDailySales() {
+        const date = document.getElementById('salesDate').value;
+        if (!date) return;
+
+        fetch(`/api/sales/daily?date=${date}`)
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('dailySalesBody');
+                if (data.items.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No sales on this date</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.items.map(item => `
+                    <tr>
+                        <td>${item.bill_number}</td>
+                        <td>${item.customer}</td>
+                        <td>₹${item.amount.toFixed(2)}</td>
+                        <td>${item.time}</td>
+                    </tr>
+                `).join('');
+
+                document.getElementById('dailyTotal').textContent = '₹' + data.total.toLocaleString('en-IN', {maximumFractionDigits: 2});
+            });
+    }
+
+    // Set today's date as default
+    document.getElementById('salesDate').valueAsDate = new Date();
+
+    loadSalesSummary();
+    loadLowStockReport();
+    loadDailySales();
+</script>
+{% endblock %}
